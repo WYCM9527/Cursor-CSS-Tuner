@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { setLocale, type RuleRef } from '@css-tuner/protocol';
+import { setLocale, type ElementSnapshot, type RuleRef } from '@css-tuner/protocol';
 import { buildPrompt } from '../src/prompt';
-import { recordView, samePage, upgradeRecord, type ChangeRecord, type StoredRecord } from '../src/records';
+import { recordElement, recordView, samePage, upgradeRecord, type ChangeRecord, type StoredRecord } from '../src/records';
 
 const project = { label: (f: string) => f.replace('/repo/', '') };
 
@@ -55,6 +55,16 @@ describe('改动记录', () => {
     expect(recordView(rec({ removal: { values: { 'padding-top': '0px' } } })).remove).toBe(true);
   });
 
+  it('记进改动的元素带上页面层级和元素自己的文字开头', () => {
+    const crumbs = [
+      { uid: 'u0', label: 'header', text: 'Logo' },
+      { uid: 'u1', label: 'a.nav', text: 'Code' },
+    ];
+    const el = { label: 'a.nav', source: null, sourceIndex: 0, sameSource: 1, breadcrumb: crumbs } as unknown as ElementSnapshot;
+    expect(recordElement(el)).toEqual({ label: 'a.nav', source: null, sourceIndex: 0, sameSource: 1, path: 'header > a.nav', text: 'Code' });
+    expect(recordElement({ ...el, breadcrumb: [crumbs[0], { uid: 'u1', label: 'a.nav' }] })).not.toHaveProperty('text');
+  });
+
   it('同一个页面：查询参数和普通锚点不算，hash 路由算', () => {
     const home = 'http://127.0.0.1:5178/';
     expect(samePage(home, 'http://127.0.0.1:5178/?x=1#faq')).toBe(true);
@@ -75,7 +85,7 @@ describe('交给 Agent 的提示词', () => {
     write: { kind: 'tailwind' as const, file: '/repo/src/App.tsx', line: 12, column: 7, utility: 'pt-4', entry: null },
   };
   const unmapped = (uid: string): Partial<ChangeRecord> => ({
-    element: { label: 'a.nav', source: null, sourceIndex: 0, sameSource: 1, path: 'body > header > nav > a.nav' },
+    element: { label: 'a.nav', source: null, sourceIndex: 0, sameSource: 1, path: 'body > header > nav > a.nav', text: 'Code' },
     preview: { kind: 'inline', uid, sourceKey: null },
   });
   const maxWidth = { props: ['max-width'], propLabel: 'max-width', from: '100%', to: '11px', value: '11px' };
@@ -97,7 +107,7 @@ describe('交给 Agent 的提示词', () => {
         '   - padding-top: 16px → 1.5rem (Tailwind token 6)',
         '   - color: #111827 → #912626',
         '',
-        '2. Element `a.nav` (page position body > header > nav > a.nav)',
+        '2. Element `a.nav` "Code" (page position body > header > nav > a.nav)',
         '   - max-width: 100% → 11px',
         '',
         'Requirements:',
@@ -113,7 +123,7 @@ describe('交给 Agent 的提示词', () => {
       [
         '修改页面「http://localhost:5173/」中的下列 1 处内容：',
         '',
-        '1. 元素 `a.nav`（页面位置 body > header > nav > a.nav）',
+        '1. 元素 `a.nav`「Code」（页面位置 body > header > nav > a.nav）',
         '   - max-width：100% → 11px',
         '',
         '要求：',
@@ -121,6 +131,13 @@ describe('交给 Agent 的提示词', () => {
         '- 改完后列出修改的地方。',
       ].join('\n'),
     );
+  });
+
+  it('元素的文字只在没有源码位置时写，用来区分同名元素', () => {
+    expect(buildPrompt([rec({ element: { ...rec({}).element, text: 'Hello' } })], ctx)).toContain('1. Element `h1.title` (src/App.tsx:12:7, component App)');
+    const tabs = buildPrompt([rec({ ...unmapped('u2'), ...maxWidth }), rec({ ...unmapped('u3'), ...maxWidth, id: 'b2', element: { ...unmapped('u3').element!, text: 'Issues' } })], ctx);
+    expect(tabs).toContain('1. Element `a.nav` "Code" (page position');
+    expect(tabs).toContain('2. Element `a.nav` "Issues" (page position');
   });
 
   it('同一个元素上交代的东西都一样，才合成一项', () => {

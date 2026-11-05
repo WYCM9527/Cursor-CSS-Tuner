@@ -1,4 +1,4 @@
-import type { ChangeKind, ChangeStatus, ChangeView, PreviewTarget, SourceLoc, Target } from '@css-tuner/protocol';
+import type { ChangeKind, ChangeStatus, ChangeView, ElementSnapshot, PreviewTarget, SourceLoc, Target } from '@css-tuner/protocol';
 import type { RecordBand } from './band';
 import type { WriteSpec } from './planner';
 
@@ -9,8 +9,8 @@ export interface ChangeRecord {
   status: ChangeStatus;
   createdAt: number;
   pageUrl: string;
-  /** path：页面上的层级（面包屑），没有源码位置时让 Agent 能找到元素 */
-  element: { label: string; source: SourceLoc | null; sourceIndex: number; sameSource: number; path?: string };
+  /** path：页面上的层级（面包屑），text：元素的文字开头；没有源码位置时让 Agent 能找到、认出元素 */
+  element: { label: string; source: SourceLoc | null; sourceIndex: number; sameSource: number; path?: string; text?: string };
   /** 样式是 CSS 属性，props 是属性名，文字和换序为空 */
   props: string[];
   propLabel: string;
@@ -66,6 +66,11 @@ export function upgradeRecord(r: StoredRecord): ChangeRecord {
     status: OLD_STATUS[r.status] ?? (r.status as ChangeStatus),
     ...(patch && !r.snapshot ? { snapshot: { file: patch.file, hash: patch.hashBefore } } : {}),
   };
+}
+
+export function recordElement(el: ElementSnapshot): ChangeRecord['element'] {
+  const text = el.breadcrumb.at(-1)?.text;
+  return { label: el.label, source: el.source, sourceIndex: el.sourceIndex, sameSource: el.sameSource, path: el.breadcrumb.map((b) => b.label).join(' > '), ...(text ? { text } : {}) };
 }
 
 export function recordView(r: ChangeRecord): ChangeView {

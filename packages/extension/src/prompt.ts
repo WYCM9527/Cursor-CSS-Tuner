@@ -106,16 +106,18 @@ function contextLines(rec: ChangeRecord): string[] {
  */
 export function buildPrompt(recs: ChangeRecord[], ctx: HandoffContext, mode: PromptMode = 'apply'): string {
   const back = mode === 'revert';
-  const items = new Map<string, { head: { label: string; loc: string; same: string }; changes: string[]; context: string[] }>();
+  const items = new Map<string, { head: { label: string; text: string; loc: string; same: string }; changes: string[]; context: string[] }>();
   for (const rec of recs) {
     const loc = where(rec, ctx.project);
     const head = {
       label: rec.element.label,
+      // 只有页面层级时，同名的兄弟元素靠文字区分
+      text: !rec.element.source && rec.element.text ? t('handoff.elementText', { text: rec.element.text }) : '',
       loc: loc ? t('common.paren', { text: loc }) : '',
       same: rec.view.affects > 1 ? t('handoff.sameSource', { n: rec.view.affects }) : '',
     };
     const context = contextLines(rec);
-    const key = [rec.preview.uid, head.label, head.loc, head.same, ...context].join('\n');
+    const key = [rec.preview.uid, head.label, head.text, head.loc, head.same, ...context].join('\n');
     const item = items.get(key) ?? { head, changes: [], context };
     item.changes.push(...changeLines(rec, ctx.tailwind, back));
     items.set(key, item);

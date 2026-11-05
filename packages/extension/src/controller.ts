@@ -76,7 +76,7 @@ import {
 } from './planner';
 import { ProjectResolver } from './project';
 import { buildPrompt, type PromptMode } from './prompt';
-import { samePage } from './records';
+import { recordElement, samePage } from './records';
 import { cssScales, measureSteps } from './scales';
 import { commandCheck, liveCheck, type CheckItem } from './selfcheck';
 import { BridgeServer } from './server';
@@ -1143,13 +1143,7 @@ export class Controller implements vscode.Disposable {
             kind: 'prop',
             key,
             pageUrl: this.page.url,
-            element: {
-              label: el.label,
-              source: el.source,
-              sourceIndex: el.sourceIndex,
-              sameSource: el.sameSource,
-              path: el.breadcrumb.map((b) => b.label).join(' > '),
-            },
+            element: recordElement(el),
             props: [name],
             propLabel: name,
             from: base === 'undefined' ? t('engine.prop.unset') : base,
@@ -1328,13 +1322,7 @@ export class Controller implements vscode.Disposable {
           kind: 'style',
           key,
           pageUrl: this.page.url,
-          element: {
-            label: el.label,
-            source: el.source,
-            sourceIndex: el.sourceIndex,
-            sameSource: el.sameSource,
-            path: el.breadcrumb.map((b) => b.label).join(' > '),
-          },
+          element: recordElement(el),
           props,
           propLabel: groupLabel(props),
           from,
@@ -1397,13 +1385,7 @@ export class Controller implements vscode.Disposable {
           kind: 'style',
           key,
           pageUrl: this.page.url,
-          element: {
-            label: el.label,
-            source: el.source,
-            sourceIndex: el.sourceIndex,
-            sameSource: el.sameSource,
-            path: el.breadcrumb.map((b) => b.label).join(' > '),
-          },
+          element: recordElement(el),
           props,
           propLabel: groupLabel(props),
           from: this.describeFrom(el, props[0], plan),
@@ -1474,13 +1456,7 @@ export class Controller implements vscode.Disposable {
           kind: 'style',
           key,
           pageUrl: this.page.url,
-          element: {
-            label: el.label,
-            source: el.source,
-            sourceIndex: el.sourceIndex,
-            sameSource: el.sameSource,
-            path: el.breadcrumb.map((b) => b.label).join(' > '),
-          },
+          element: recordElement(el),
           props: gp,
           propLabel: groupLabel(gp),
           from: classes?.join(' ') || from[gp[0]],
@@ -1533,13 +1509,7 @@ export class Controller implements vscode.Disposable {
           kind: 'text',
           key,
           pageUrl: this.page.url,
-          element: {
-            label: el.label,
-            source: el.source,
-            sourceIndex: el.sourceIndex,
-            sameSource: el.sameSource,
-            path: el.breadcrumb.map((b) => b.label).join(' > '),
-          },
+          element: recordElement(el),
           props: [],
           propLabel: t('panel.change.text'),
           from: oneLine(original),
@@ -1602,6 +1572,7 @@ export class Controller implements vscode.Disposable {
             sourceIndex: 0,
             sameSource: 1,
             path: [...sel.el.breadcrumb.slice(0, -1).map((b) => b.label), u.label].join(' > '),
+            ...(u.text ? { text: u.text } : {}),
           },
           from: String(unit + 1),
           to: String(next.indexOf(unit) + 1),
