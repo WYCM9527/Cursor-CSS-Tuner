@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.1
+
+- Prompts for the Agent are much shorter. A prompt opens with the page, gives one item per element with where it is and each change as old value → new value (several changes to the same element share one item), and ends with just two requests: consider whether other affected places should change too, asking you when unsure, and list what was changed. The detailed instructions are gone, such as which tokens to prefer, how to write breakpoint prefixes or `@media`, and where to change props. Revert prompts use the same format with the arrows reversed.
+- Properties edited together are written as CSS shorthands in the prompt, for example `padding-inline` instead of `padding-left / padding-right`.
+- For an element the extension can't map to your source, the prompt adds the element's text after its name, so elements with the same name and page position can be told apart.
+
 ## 0.10.0
 
 - Apply now hands every change to the Agent, and the extension no longer edits your files itself. Apply and Apply All put a prompt into a new Agent chat; review it and press Enter to send it (it's copied to the clipboard too). The prompt says where each change is in your code and what it should become, without prescribing how to write it.
