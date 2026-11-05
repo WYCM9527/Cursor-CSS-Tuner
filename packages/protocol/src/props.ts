@@ -6,6 +6,8 @@ export type PropKind =
   | 'number'
   | 'shadow'
   | 'keyword'
+  /** 字体栈：逗号分隔的字体名，排在前面的优先 */
+  | 'fontFamily'
   | 'fontWeight'
   | 'lineHeight'
   | 'tracks'
@@ -53,6 +55,7 @@ export const PROPS: PropMeta[] = [
   { prop: 'min-height', section: 'size', kind: 'length' },
   { prop: 'max-height', section: 'size', kind: 'length' },
 
+  { prop: 'font-family', section: 'typography', kind: 'fontFamily', inherited: true },
   { prop: 'font-size', section: 'typography', kind: 'length', inherited: true },
   { prop: 'font-weight', section: 'typography', kind: 'fontWeight', inherited: true },
   { prop: 'line-height', section: 'typography', kind: 'lineHeight', inherited: true },

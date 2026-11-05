@@ -19,6 +19,7 @@ export function emptyScales(rem: number, mode: Scales['mode'] = 'css'): Scales {
     spacing: [],
     size: [],
     radius: [],
+    fontFamily: [],
     fontSize: [],
     fontWeight: WEIGHTS.map(([label, value]) => ({ label, value, token: null })),
     lineHeight: [],
@@ -38,6 +39,8 @@ type Bucket = Exclude<keyof Scales, 'mode' | 'rem' | 'gradientIn'>;
 function bucketOf(v: CssVar): Bucket | null {
   const n = v.name.toLowerCase();
   if (v.kind === 'color') return 'colors';
+  // 字体栈：名字像字体，值不以数字开头（排除 font 简写）
+  if (v.kind === 'other' && /font|family|typeface|^--ff-/.test(n) && !/size|weight|style|stretch|feature|variation|smooth/.test(n) && !/^\d/.test(v.value.trim())) return 'fontFamily';
   if (/shadow|elevation/.test(n)) return 'shadow';
   if (v.kind === 'number') {
     if (/weight|fw/.test(n)) return 'fontWeight';
@@ -68,7 +71,7 @@ export function cssScales(page: PageInfo, rem: number): Scales {
       step.px = px;
     } else if (v.kind === 'number') {
       step.px = parseFloat(v.value);
-    } else if (v.kind === 'color') {
+    } else if (v.kind === 'color' || b === 'fontFamily') {
       step.value = v.value;
     }
     if (b === 'shadow') step.value = `var(${v.name})`;

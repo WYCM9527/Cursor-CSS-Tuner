@@ -760,6 +760,24 @@ defineStep('scope', async (c, s) => {
   return { scope: c.state.scope, ...summarize(c.state.selection, (s.props as string[]) ?? []) };
 });
 
+/** 打开字体菜单（面板发 fontsOpen），等本机字体读完：返回页面字体、本机字体的个数和开头几个、has 里的字体装没装、主题字体 */
+defineStep('fonts', async (c, s) => {
+  const t0 = Date.now();
+  await c.handle({ t: 'fontsOpen' });
+  const deadline = t0 + (Number(s.timeoutMs) || 15000);
+  while (!c.state.fonts?.local && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+  const f = c.state.fonts;
+  return {
+    ms: Date.now() - t0,
+    page: f?.page ?? null,
+    local: f?.local?.length ?? null,
+    failed: !!f?.failed,
+    sample: f?.local?.slice(0, 5) ?? null,
+    has: Object.fromEntries(((s.has as string[]) ?? []).map((n) => [n, !!f?.local?.includes(n)])),
+    theme: c.state.scales?.fontFamily.map((x) => `${x.label}${x.token !== undefined ? `(${x.token})` : ''}=${x.value}`) ?? null,
+  };
+});
+
 /** 执行编辑器命令，比如录屏前关掉侧栏，让浏览器标签页比模拟的视口大 */
 defineStep('command', async (_c, s) => {
   await vscode.commands.executeCommand(String(s.id), ...((s.args as unknown[]) ?? []));

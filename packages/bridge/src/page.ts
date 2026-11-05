@@ -1,4 +1,4 @@
-import { parseColor, parseCssNumber, type CssVar, type PageInfo, type SheetInfo } from '@css-tuner/protocol';
+import { parseColor, parseCssNumber, primaryFamily, type CssVar, type PageInfo, type SheetInfo } from '@css-tuner/protocol';
 import { collectRules } from './cascade';
 import { hasReact } from './source';
 import { isOwnSheet, isTailwindSheet, sheetDevId } from './util';
@@ -53,6 +53,16 @@ export function rootVars(limit = 600): CssVar[] {
     }
   }
   return out;
+}
+
+/** 页面用 @font-face 加载的字体名；next/font 生成的 __Inter_d65c78 这类名字不是源码里写的，不算 */
+export function pageFonts(): string[] {
+  const names = new Map<string, string>();
+  document.fonts.forEach((f) => {
+    const name = primaryFamily(f.family);
+    if (name && !name.startsWith('__')) names.set(name.toLowerCase(), name);
+  });
+  return [...names.values()].sort((a, b) => a.localeCompare(b));
 }
 
 export function pageInfo(): PageInfo {

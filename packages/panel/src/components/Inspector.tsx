@@ -11,9 +11,11 @@ import {
   PADDING,
   parseColor,
   parseGradient,
+  primaryFamily,
   RADIUS,
   sameBackgroundImage,
   sameColor,
+  sameFontStack,
   solidColorOf,
   STROKE_CLIP,
   STROKE_ORIGIN,
@@ -35,6 +37,7 @@ import { Assets } from './Assets';
 import { ColorField } from './ColorField';
 import { Content } from './Content';
 import { AddRemove, Corner, IconToggle, Row, Section, Segmented, SelectField, SliderField } from './controls';
+import { FontField } from './FontField';
 import { Icon } from './icons';
 import { NumberField } from './NumberField';
 import { PaintField } from './PaintField';
@@ -470,6 +473,21 @@ export function Inspector({ state, sel, prefs, setPrefs, edit, editText, editPro
       </Section>
 
       <Section id="typography" title={t('insp.typography')} open={open('typography')} onToggle={toggle}>
+        <Row label={t('insp.font')}>
+          <FontField
+            title={t('insp.font')}
+            value={currentValue(sel, 'font-family')}
+            display={fontLabel(sel, scales?.fontFamily)}
+            steps={scales?.fontFamily ?? []}
+            vars={!tailwind}
+            fonts={state.fonts}
+            pending={isPending(sel, ['font-family'])}
+            target={sel.targets['font-family']}
+            corner={corner(['font-family'])}
+            onOpen={() => send({ t: 'fontsOpen' })}
+            onEdit={(e) => edit(['font-family'], e)}
+          />
+        </Row>
         <Row label={t('insp.sizeWeight')}>
           {num(['font-size'], <b className="glyph">T</b>, t('insp.fontSize'), { min: 0 })}
           <SelectField
@@ -743,6 +761,22 @@ function strokeProps(part: 'style' | 'color', sides: Side[], tailwind: boolean):
   const key = sides.join();
   const exact = sides.length === 1 || sides.length === 4 || key === 'top,bottom' || key === 'right,left';
   return (exact && !(part === 'style' && tailwind) ? sides : SIDES).map((s) => `border-${s}-${part}`);
+}
+
+/** 字体字段上的名字：主题里的字体显示令牌名，源码写的是变量时显示变量名，其余显示首选的字体 */
+function fontLabel(sel: SelectionView, steps: ScaleStep[] | undefined): string {
+  const value = currentValue(sel, 'font-family');
+  const step = steps?.find((s) => sameFontStack(s.value, value));
+  if (step) return step.label;
+  if (!('font-family' in sel.pending)) {
+    // Tailwind 4 的 font-sans 生成的是 var(--font-sans)，next/font 这类变量算出来的字体栈对不上主题的值，按类名认
+    const utility = sel.el.winners['font-family']?.rule?.utility?.replace(/^.*:/, '');
+    const token = utility?.startsWith('font-') ? steps?.find((s) => s.token === utility.slice(5)) : undefined;
+    if (token) return token.label;
+    const v = declaredVar(sel.el, 'font-family');
+    if (v) return v;
+  }
+  return primaryFamily(value) || value;
 }
 
 function weightLabel(value: string, steps: ScaleStep[] | undefined): string {

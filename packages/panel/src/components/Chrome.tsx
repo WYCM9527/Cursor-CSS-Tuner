@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { changeName, t, type ChangeView, type Locale, type PanelState, type PanelToExt, type Scope, type SelectionView, type ViewportPreset } from '@css-tuner/protocol';
-import { displayValue, shortFile } from '../lib/format';
+import { displayValue, fontValue, shortFile } from '../lib/format';
 import { boundary, nameOf } from '../lib/names';
 import { IconToggle } from './controls';
 import { Icon } from './icons';
@@ -258,13 +258,14 @@ export function ChangeList({ state, send, open, onToggle }: { state: PanelState;
   );
 }
 
-/** 改动前后的值：文字加引号，换序显示位置，样式按颜色、变量缩写 */
+/** 改动前后的值：文字加引号，换序显示位置，样式按颜色、变量缩写，字体栈只显示首选的字体 */
 function changeValues(c: ChangeView): [string, string] {
   if (c.kind === 'text') return [`“${c.from}”`, `“${c.to}”`];
   if (c.kind === 'reorder') return [t('panel.change.position', { n: c.from }), t('panel.change.position', { n: c.to })];
   if (c.kind === 'prop') return [c.from, c.to];
-  if (c.remove) return [displayValue(c.from), t('panel.change.removed')];
-  return [displayValue(c.from), displayValue(c.to)];
+  const show = c.props.includes('font-family') ? fontValue : displayValue;
+  if (c.remove) return [show(c.from), t('panel.change.removed')];
+  return [show(c.from), show(c.to)];
 }
 
 function ChangeItem({ c, busy, send }: { c: ChangeView; busy: boolean; send: Send }) {

@@ -358,6 +358,8 @@ export interface BridgeMethods {
   reloadSheets: { p: { hrefs?: string[] }; r: number };
   /** 选中元素连同子元素里看得见的图片、背景图、SVG 和视频（限时） */
   assets: { p: Record<string, never>; r: AssetList };
+  /** 页面用 @font-face 加载的字体名（next/font 这类带哈希的内部名字不算） */
+  fonts: { p: Record<string, never>; r: string[] };
   /** 清单里一条资源的内容：SVG 是代码（file 换成页面上实际的颜色，copy 保留 currentColor），blob: 地址是 base64 字节 */
   assetData: {
     p: { id: string; as: 'file' | 'copy' };
@@ -491,6 +493,8 @@ export interface Scales {
   spacing: ScaleStep[];
   size: ScaleStep[];
   radius: ScaleStep[];
+  /** 字体：Tailwind 是主题里的 --font-*，普通 CSS 项目是 :root 上像字体的变量；值是整串字体栈 */
+  fontFamily: ScaleStep[];
   fontSize: ScaleStep[];
   fontWeight: ScaleStep[];
   lineHeight: ScaleStep[];
@@ -581,6 +585,15 @@ export interface PanelState {
   locale: Locale;
   /** 上一步 / 下一步会撤销、重做的操作说明，没有可撤销、重做的为 null */
   history: { undo: string | null; redo: string | null };
+  /** 字体菜单里的候选，第一次打开字体菜单之前为 null */
+  fonts: FontsView | null;
+}
+
+/** 页面用 @font-face 加载的字体；这台电脑装的字体（还在读时为 null，读不到时是空的、failed 为真） */
+export interface FontsView {
+  page: string[];
+  local: string[] | null;
+  failed?: boolean;
 }
 
 export type PanelToExt =
@@ -632,6 +645,8 @@ export type PanelToExt =
   | { t: 'saveAllAssets' }
   | { t: 'copySvg'; id: string }
   | { t: 'revealAsset'; id: string }
+  /** 打开字体菜单：取页面加载的字体，本机字体读过一次就用读到的 */
+  | { t: 'fontsOpen' }
   /** 面板里的未捕获异常，写进扩展的输出面板 */
   | { t: 'error'; message: string };
 

@@ -1,4 +1,4 @@
-import { changeName, getLocale, groupLabel, setLocale, t, viewportBands, type AssetView, type ChangeView, type ElementSnapshot, type OrderView, type PanelState, type PanelToExt, type PropsView, type Scales, type ScaleStep, type Target } from '@css-tuner/protocol';
+import { changeName, getLocale, groupLabel, sameValue, setLocale, t, viewportBands, type AssetView, type ChangeView, type ElementSnapshot, type OrderView, type PanelState, type PanelToExt, type PropsView, type Scales, type ScaleStep, type Target } from '@css-tuner/protocol';
 import type { Host } from './host';
 
 /** 浏览器里调试面板用的假宿主：行为尽量贴近扩展，便于不开 Cursor 也能看交互 */
@@ -21,6 +21,13 @@ const PALETTE: Record<string, string[]> = {
 };
 const SHADES = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 
+const SANS = 'ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"';
+/** 假宿主里「本机装的字体」：常见的 macOS 字体，浏览器里打开时能看到真实字形 */
+const LOCAL_FONTS = [
+  'American Typewriter', 'Arial', 'Avenir Next', 'Baskerville', 'Didot', 'Futura', 'Georgia', 'Gill Sans', 'Helvetica Neue', 'Hiragino Sans GB',
+  'Inter', 'Kaiti SC', 'Menlo', 'Optima', 'PingFang SC', 'PingFang TC', 'Rockwell', 'Songti SC', 'Times New Roman', 'Verdana', 'Zapfino',
+];
+
 export function mockScales(): Scales {
   const sp = spacing();
   return {
@@ -32,6 +39,12 @@ export function mockScales(): Scales {
       return { label: k, value: rem(+v), px: +v, token: k };
     })],
     radius: [['xs', 2], ['sm', 4], ['md', 6], ['lg', 8], ['xl', 12], ['2xl', 16], ['3xl', 24], ['card', 14], ['full', 9999]].map(([k, v]) => ({ label: String(k), value: `${v}px`, px: +v, token: String(k) })),
+    fontFamily: [
+      ['sans', SANS],
+      ['serif', 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif'],
+      ['mono', 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace'],
+      ['display', '"Playfair Display", ui-serif, serif'],
+    ].map(([k, v]) => ({ label: k, value: v, token: k })),
     fontSize: [['xs', 12], ['sm', 14], ['base', 16], ['lg', 18], ['xl', 20], ['2xl', 24], ['3xl', 30], ['4xl', 36], ['5xl', 48], ['6xl', 60]].map(([k, v]) => ({ label: String(k), value: rem(+v), px: +v, token: String(k) })),
     fontWeight: [['thin', 100], ['extralight', 200], ['light', 300], ['normal', 400], ['medium', 500], ['semibold', 600], ['bold', 700], ['extrabold', 800], ['black', 900]].map(([k, v]) => ({ label: String(k), value: String(v), token: String(k) })),
     lineHeight: [['none', '1'], ['tight', '1.25'], ['snug', '1.375'], ['normal', '1.5'], ['relaxed', '1.625'], ['loose', '2'], ...[3, 4, 5, 6, 7, 8, 9, 10].map((n) => [String(n), rem(n * 4)])].map(([k, v]) => ({ label: k, value: v, token: k })),
@@ -140,6 +153,7 @@ function el(over: Partial<ElementSnapshot>): ElementSnapshot {
     'max-width': 'none',
     'min-height': 'auto',
     'max-height': 'none',
+    'font-family': SANS,
     'font-size': '16px',
     'font-weight': '400',
     'line-height': '24px',
@@ -342,6 +356,7 @@ export function createMockHost(): Host {
     snap: true,
     locale: getLocale(),
     history: { undo: null, redo: null },
+    fonts: null,
   };
   const pendingByEl: Record<string, Record<string, string>> = {};
   const removedByEl: Record<string, string[]> = {};
@@ -507,7 +522,12 @@ export function createMockHost(): Host {
       return;
     }
     for (const p of props) sel.pending[p] = edit.edit.value;
-    if (edit.edit.phase !== 'commit') return;
+    if (edit.edit.phase !== 'commit') {
+      // 和扩展一样：这些属性没有未应用的改动、预览回到原值时不算改过
+      const touched = state.changes.some((c) => c.status === 'pending' && c.element === e.label && c.props.some((p) => props.includes(p)));
+      if (!touched && props.every((p) => sameValue(p, edit.edit.value, e.computed[p] ?? ''))) for (const p of props) delete sel.pending[p];
+      return;
+    }
     dropChanges((c) => !!c.remove && c.element === e.label && c.props.some((p) => props.includes(p)));
     for (const p of props) sel.pending[p] = edit.edit.value;
     const from = e.computed[props[0]];
@@ -770,6 +790,14 @@ export function createMockHost(): Host {
           emit();
         }, 400);
         return;
+      case 'fontsOpen':
+        if (state.fonts) return;
+        state.fonts = { page: ['Inter', 'Playfair Display'], local: null };
+        setTimeout(() => {
+          state.fonts = { ...state.fonts!, local: LOCAL_FONTS };
+          emit();
+        }, 600);
+        break;
       case 'saveAsset':
         state.notice = { level: 'info', text: t('ext.assets.saved', { name: ASSETS.find((a) => a.id === m.id)?.name ?? m.id }) };
         break;

@@ -44,6 +44,14 @@ export function tailwindScales(d: TwDesign, rem = d.rem): Scales {
   }
   radius.push({ label: 'full', value: '9999px', px: 9999, token: 'full' });
 
+  // --font 下还有 --font-weight-*、--font-sans--font-feature-settings 这类：只留 font-* 类设置字体的。
+  // 主题里的字体栈常写成好几行，空白压成一个空格
+  const fontFamily: ScaleStep[] = [];
+  for (const [k, v] of d.namespace('--font')) {
+    if (k === null || k.includes('--') || !d.info(`font-${k}`)?.values.has('font-family')) continue;
+    fontFamily.push({ label: k, value: v.replace(/\s+/g, ' ').trim(), token: k });
+  }
+
   const fontSize: ScaleStep[] = [];
   for (const [k, v] of d.namespace('--text')) {
     if (k === null || k.includes('--')) continue;
@@ -103,6 +111,7 @@ export function tailwindScales(d: TwDesign, rem = d.rem): Scales {
     spacing,
     size,
     radius,
+    fontFamily,
     fontSize,
     fontWeight,
     lineHeight,

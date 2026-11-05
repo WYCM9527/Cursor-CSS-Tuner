@@ -80,7 +80,9 @@ function changeLines(rec: ChangeRecord, tw: boolean, back: boolean): string[] {
     }
     default: {
       if (rec.removal) return [t(back ? 'handoff.remove.revert' : 'handoff.remove', { props: rec.propLabel, from: rec.from })];
-      return [t('handoff.change', { props: propsText(rec.props), ...arrow(rec.from, valueText(rec.value, rec.token, tw)) })];
+      const lines = [t('handoff.change', { props: propsText(rec.props), ...arrow(rec.from, valueText(rec.value, rec.token, tw)) })];
+      if (rec.detail?.font && !back) lines.push(t('handoff.localFont', { font: rec.detail.font }));
+      return lines;
     }
   }
 }

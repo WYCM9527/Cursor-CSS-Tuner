@@ -47,6 +47,7 @@ import {
 import { previewCompanions, tailwindScales, type RecipeInfo, type TwDesign } from '@css-tuner/engine';
 import { Applier, SnapshotStore } from './applier';
 import { AssetService } from './assets';
+import { FontService } from './fonts';
 import { bandRange } from './band';
 import { BrowserAdapter } from './browser';
 import { literalCompletions } from './completions';
@@ -149,6 +150,7 @@ export class Controller implements vscode.Disposable {
   readonly journal: Journal;
   readonly applier: Applier;
   readonly assets: AssetService;
+  readonly fonts: FontService;
   session: PageSession | null = null;
   page: PageInfo | null = null;
   state: PanelState;
@@ -191,6 +193,7 @@ export class Controller implements vscode.Disposable {
     this.journal = new Journal(ctx.workspaceState);
     this.applier = new Applier(this, new SnapshotStore(ctx));
     this.assets = new AssetService(this, ctx.globalState);
+    this.fonts = new FontService(this);
     this.state = {
       connection: 'idle',
       page: null,
@@ -207,6 +210,7 @@ export class Controller implements vscode.Disposable {
       snap: cfg.get<boolean>('snap', true),
       locale: getLocale(),
       history: { undo: null, redo: null },
+      fonts: null,
     };
     this.disposables.push(
       this.journal,
@@ -396,6 +400,9 @@ export class Controller implements vscode.Disposable {
       case 'copySvg':
       case 'revealAsset':
         await this.assetAction(msg);
+        return;
+      case 'fontsOpen':
+        await this.fonts.open();
         return;
     }
   }
@@ -1290,7 +1297,15 @@ export class Controller implements vscode.Disposable {
       const res = await session.call('preview', { id: previewId, target: g.plan.preview, decls });
       const live = this.selectionOf(el);
       if (live) for (const p of props) live.pending[p] = req.value;
-      if (req.phase !== 'commit') continue;
+      if (req.phase !== 'commit') {
+        // 预览回到原值（关掉下拉菜单时恢复打开前的值），这些属性上又没有未应用的改动：撤掉预览，不算改过
+        const untouched = !this.pendingOn(el).some((r) => r.props.some((p) => props.includes(p)));
+        if (untouched && props.every((p) => res.computed[p] !== undefined && sameValue(p, res.computed[p], el.computed[p] ?? ''))) {
+          await session.call('clearPreview', { id: previewId });
+          if (live) for (const p of props) delete live.pending[p];
+        }
+        continue;
+      }
 
       // 这些属性上别的未应用删除（删的范围不一样）：先撤掉删除再按新值改，原值按删之前的算
       const removals = this.pendingOn(el).filter((r) => r.removal && r.key !== key && r.props.some((p) => props.includes(p)));
@@ -1314,9 +1329,11 @@ export class Controller implements vscode.Disposable {
       const from = was[props[0]] ?? this.describeFrom(el, props[0], g.plan);
       const expected = Object.fromEntries(props.filter((p) => res.computed[p] !== undefined).map((p) => [p, res.computed[p]]));
       const { view, write } = g.plan;
+      const font = props.includes('font-family') && !req.token ? this.fonts.localOnly(req.value) : null;
+      const detail = font ? { font } : undefined;
       if (existing) {
         const undo = existing.removal ? { from, removal: undefined } : {};
-        this.journal.update(existing.id, { value: req.value, token: req.token ?? null, to, expected, view, write, decls: undefined, ...undo });
+        this.journal.update(existing.id, { value: req.value, token: req.token ?? null, to, expected, view, write, decls: undefined, detail, ...undo });
       } else {
         this.journal.add({
           kind: 'style',
@@ -1335,6 +1352,7 @@ export class Controller implements vscode.Disposable {
           preview: g.plan.preview,
           previewId,
           write,
+          ...(detail ? { detail } : {}),
           ...(band ? { band: bandRange(band, this.state.viewport.bands) } : {}),
         });
       }

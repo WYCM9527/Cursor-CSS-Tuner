@@ -12,6 +12,7 @@ It does one job: **adjust styles, text, order and props inside Cursor, see the r
 
 - **Pick elements**: hover to highlight, click to select. The panel says what you picked in plain words, followed by the start of its text (for example *Heading “Welcome”*), and which file it's written in. The Layers section shows the elements around it, and every instance rendered by the same line of JSX or template is marked on the page.
 - **Tuning panel**: layout (flex / grid), spacing, size, position, text, fill, stroke, radius, shadow, effects and CSS variables. Drag or scrub numbers, pick colors, and snap to your theme's values and CSS variables; hold Alt for any value. Fill and stroke can also be a linear or radial gradient: set the angle, click the gradient bar to add a color stop, drag stops to move them, and pick each stop's color from your theme.
+- **Fonts**: the Font field at the top of the Text section opens a searchable list of your theme's fonts (Tailwind's `font-*`, or CSS variables that hold a font stack in plain CSS projects), fonts the page loads with `@font-face`, fonts installed on your computer and generic families. Each name is shown in its own typeface, and hovering one previews it on the page. To use a font that isn't listed, type its name or a whole font stack. When you pick a font that's only installed on your computer, the prompt says the page doesn't load it.
 - **Add and remove properties**: an element with no fill, stroke or shadow gets one from the + on that section, and − takes it away again. Every value that comes from a declaration in your code has a × in its corner: the page drops it right away, and applying asks the Agent to remove the declaration (in Tailwind, its class), so the element falls back to what it would be without it. Inherited values, initial values and framework presets have nothing to remove.
 - **Undo, redo and reset**: the change list sits at the top of the panel, folded into one line by default (click it to see each change). Undo and Redo, right next to Apply All (or ⌘Z / ⇧⌘Z, Ctrl+Z / Ctrl+Shift+Z, in the panel), step through the changes you haven't applied yet, and a field with an unapplied change shows a reset button in its corner. The change list follows along.
 - **Edit text**: the Content section lists the selected element's text, split into runs around inline tags such as `<b>`. Edit a run there, or double-click text inside the selected element on the page and type in place. Enter adds the change to the list; Esc undoes it.
@@ -104,12 +105,14 @@ For plain HTML projects, right-click an HTML file or folder in the Explorer and 
 - **Undo and Redo only cover changes you haven't applied**: changes handed to the Agent aren't in the history. To take one back, click *Revert* in the list.
 - **The check relies on the page updating**: after a change is handed off, the panel waits until the page matches the preview. If the Agent didn't change anything, changed a place the page doesn't use, or the dev server didn't hot reload, the change stays *Waiting for the Agent*; use *Send Again* or *Discard*.
 - **Viewport**: resizing the browser view while a width is picked doesn't rescale the page; switch to *Actual width* and back.
+- **Installed fonts** are listed by the system's font manager on macOS, PowerShell on Windows and fontconfig (`fc-list`) on Linux. If the list can't be read, the Font menu still offers theme, page and generic fonts.
 
 ## Security and privacy
 
 - The tuner script is injected only into tabs you open in Cursor's built-in browser. No proxy is involved and your project code isn't modified.
 - The WebSocket between the page and the extension listens on `127.0.0.1` only and requires a random token.
 - The extension makes no internet requests; in Next.js projects it only talks to your own dev server.
+- The list of installed fonts is read on your computer, with the system tools above, the first time you open the Font menu.
 
 ## Troubleshooting
 

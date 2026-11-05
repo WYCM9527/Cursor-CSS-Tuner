@@ -5,7 +5,7 @@ import { beginEdit, finish as finishEdit, isEditingText, textAt } from './edit';
 import { fallbackValues } from './fallback';
 import { visibleBoxes } from './order';
 import { redraw, setDragModel, setGripHidden, setHover, setSelected } from './overlay';
-import { pageInfo } from './page';
+import { pageFonts, pageInfo } from './page';
 import { disposeMeasure, initMeasure, measureOn, setMeasure, setMeasureSteps } from './measure';
 import { pickOn, setPick } from './pick';
 import { activeOrder, clearAll, clearPreview, hasOrderPreviews, preview, prune, reapplyOrders, reattachRules } from './preview';
@@ -398,6 +398,7 @@ class Bridge {
     reloadSheets: ({ hrefs }) => reloadSheets(hrefs),
     assets: async () => (this.selected && this.selected.isConnected ? listAssets(this.selected) : { items: [], count: 0, more: false }),
     assetData: ({ id, as }) => assetData(id, as),
+    fonts: () => pageFonts(),
   };
 
   private async handle(req: BridgeRequest) {

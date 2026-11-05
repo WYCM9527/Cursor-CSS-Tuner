@@ -60,6 +60,7 @@ export const SHORTHANDS: Record<string, string[]> = {
   'border-end-start-radius': ['border-radius'],
   'row-gap': ['gap'],
   'column-gap': ['gap'],
+  'font-family': ['font'],
   'font-size': ['font'],
   'font-weight': ['font'],
   'line-height': ['font'],

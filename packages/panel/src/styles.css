@@ -1381,6 +1381,101 @@ select {
   box-shadow: var(--chip-shadow);
 }
 
+/* ---------- 字体 ---------- */
+
+.font-sel .sel-value {
+  font-size: 12.5px;
+}
+
+/* 搜索框固定在上面，下面的列表自己滚 */
+.font-menu {
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  overflow: hidden;
+  padding: 0;
+}
+
+.font-search {
+  flex: none;
+  height: 24px;
+  margin: 4px;
+  padding: 0 7px;
+  background: var(--field);
+  border: 1px solid var(--field-border);
+  border-radius: var(--r);
+  font-size: 11.5px;
+}
+
+.font-search:focus {
+  outline: none;
+  border-color: var(--focus);
+}
+
+.font-search::placeholder {
+  color: var(--muted);
+}
+
+.font-list {
+  max-height: 264px;
+  overflow-y: auto;
+  padding: 0 3px 3px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--fg) 18%, transparent) transparent;
+}
+
+.font-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 6px 3px;
+  background: var(--raised);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.font-typed {
+  padding-bottom: 3px;
+  margin-bottom: 1px;
+  border-bottom: 1px solid var(--line);
+}
+
+/* 几百个本机字体：看不见的项不排版，滚到时才加载字形 */
+.sel-menu .font-list button {
+  height: 24px;
+  align-items: center;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 24px;
+}
+
+.font-list button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font);
+  font-size: 13px;
+}
+
+.font-list button small {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+}
+
+.font-list button.is-active {
+  background: var(--hover);
+}
+
+.font-note {
+  padding: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* ---------- 分段 ---------- */
 
 .seg {

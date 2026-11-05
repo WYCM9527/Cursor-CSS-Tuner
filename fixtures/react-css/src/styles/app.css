@@ -2,7 +2,7 @@
 
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-body);
   color: var(--color-ink);
   background: #f6f8fa;
 }

@@ -33,8 +33,8 @@ export interface ChangeRecord {
   snapshot?: { file: string; hash: string };
   /** 最近一次交给 Agent（应用或还原）的时间 */
   sentAt?: number;
-  /** 交给 Agent 时用的附加说明：换序后兄弟的新顺序和原来的顺序、props 所属组件和它的调用处、文字来源 */
-  detail?: { order?: string[]; was?: string[]; component?: string; site?: string; origin?: string };
+  /** 交给 Agent 时用的附加说明：换序后兄弟的新顺序和原来的顺序、props 所属组件和它的调用处、文字来源、只装在本机的字体 */
+  detail?: { order?: string[]; was?: string[]; component?: string; site?: string; origin?: string; font?: string };
   /**
    * 删属性：每个属性删掉之后页面上的值（面板显示、应用后核对）、删之前的写法（撤掉删除再改时当原值显示；
    * 删除预览开着时元素快照里已经读不到），Tailwind 还有要去掉的类（各属性当前生效的类名）

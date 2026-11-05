@@ -8,4 +8,5 @@ export * from './messages';
 export * from './selectors';
 export * from './cssprops';
 export * from './compare';
+export * from './fonts';
 export * from './i18n';

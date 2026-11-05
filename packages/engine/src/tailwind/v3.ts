@@ -213,6 +213,14 @@ function themeString(v: unknown): string | null {
   return null;
 }
 
+/** fontFamily 的值：字符串、字体名数组，或 [字体名数组, { fontFeatureSettings }]；数组照 Tailwind 的做法用逗号连起来 */
+function fontStack(v: unknown): string | null {
+  if (typeof v === 'string') return v;
+  if (!Array.isArray(v)) return null;
+  if (Array.isArray(v[0]) || (typeof v[0] === 'string' && v.length === 2 && v[1] && typeof v[1] === 'object')) return fontStack(v[0]);
+  return v.every((x) => typeof x === 'string') ? v.join(', ') : null;
+}
+
 /** 嵌套的主题对象（颜色）展开成 red-500 这样的键；DEFAULT 用父级的名字 */
 function flatten(obj: unknown, prefix = '', out: Array<[string, unknown]> = []): Array<[string, unknown]> {
   if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return out;
@@ -271,6 +279,13 @@ export function namespaces(theme: Theme): { spaces: Map<string, Map<string | nul
     if (typeof lh === 'string') text.push([`${k}--line-height`, lh]);
   }
   put('--text', text);
+  put(
+    '--font',
+    Object.entries((theme.fontFamily ?? {}) as Record<string, unknown>).flatMap(([k, v]): Array<[string, string]> => {
+      const s = fontStack(v);
+      return s === null ? [] : [[k, s]];
+    }),
+  );
   put('--font-weight', entries('fontWeight'));
   put(
     '--leading',

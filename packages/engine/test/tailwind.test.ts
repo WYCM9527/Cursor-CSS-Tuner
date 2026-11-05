@@ -57,6 +57,9 @@ describe('Tailwind 刻度', () => {
     expect(s.colors.find((x) => x.token === 'brand')?.value).toBe('#3b5bdb');
     expect(s.fontSize.find((x) => x.token === 'lg')?.px).toBe(18);
     expect(s.fontSize.some((x) => x.label.includes('--'))).toBe(false);
+    // --font 下的 --font-weight-* 不算字体；theme.css 里分几行写的字体栈压成一行
+    expect(s.fontFamily.map((x) => x.token)).toEqual(['sans', 'serif', 'mono']);
+    expect(s.fontFamily.find((x) => x.token === 'mono')?.value).toMatch(/^ui-monospace, SFMono-Regular, .*, "Courier New", monospace$/);
     expect(s.size.find((x) => x.token === '3xl')?.px).toBe(768);
     // 断点写成 rem，媒体查询按 16px 换算
     expect(s.breakpoints.map((b) => `${b.name}=${b.px}`)).toEqual(['sm=640', 'md=768', 'lg=1024', 'xl=1280', '2xl=1536']);

@@ -11,4 +11,6 @@
   --color-muted: #656d76;
   --color-accent: #e8590c;
   --color-surface: #ffffff;
+  --font-body: system-ui, sans-serif;
+  --font-display: Georgia, 'Times New Roman', serif;
 }

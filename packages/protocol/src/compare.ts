@@ -1,4 +1,5 @@
 import { parseColor, sameColor } from './color';
+import { sameFontFamily } from './fonts';
 import { sameBackgroundImage } from './gradient';
 import { propMeta } from './props';
 import { splitTopLevel } from './selectors';
@@ -29,9 +30,10 @@ function sameLayerList(a: string, b: string): boolean {
   return true;
 }
 
-/** 两个计算值是否视为相同：颜色按感知距离、长度允许 ±0.5px、纯数字允许 0.01 误差，渐变按画出来的样子 */
+/** 两个计算值是否视为相同：颜色按感知距离、长度允许 ±0.5px、纯数字允许 0.01 误差，渐变按画出来的样子，字体看首选的字体 */
 export function sameValue(prop: string, a: string, b: string): boolean {
   if (a === b) return true;
+  if (prop === 'font-family') return sameFontFamily(a, b);
   if (prop === 'box-shadow' || prop === 'text-shadow') return visibleShadows(a) === visibleShadows(b);
   if (prop === 'background-image') return sameBackgroundImage(a, b);
   if (LAYER_LISTS.has(prop)) return sameLayerList(a, b);

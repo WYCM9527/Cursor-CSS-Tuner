@@ -206,6 +206,15 @@ describe('交给 Agent 的提示词', () => {
     expect(buildPrompt([rec({ note: 'old' })], ctx)).not.toContain('After the last attempt');
   });
 
+  it('换成只装在本机、页面没加载的字体时写明；还原时不写', () => {
+    const font = { ...ownClass, props: ['font-family'], propLabel: 'font-family', from: 'ui-sans-serif, system-ui', to: '"PingFang SC"', value: '"PingFang SC"', detail: { font: 'PingFang SC' } };
+    const p = buildPrompt([rec(font)], ctx);
+    expect(p).toContain('   - font-family: ui-sans-serif, system-ui → "PingFang SC"\n   - PingFang SC is installed on this computer; the page doesn\'t load it\n');
+    expect(buildPrompt([rec({ ...font, status: 'applied' })], ctx, 'revert')).not.toContain('installed');
+    setLocale('zh-CN');
+    expect(buildPrompt([rec(font)], ctx)).toContain('   - PingFang SC 是本机装的字体，页面没有加载它');
+  });
+
   it('props 写出组件和属性名；交给 Agent 时附上调用处', () => {
     const p = buildPrompt([rec({ kind: 'prop', props: ['variant'], propLabel: 'variant', from: '"primary"', to: '"ghost"', value: '"ghost"', detail: { component: 'Button', site: 'src/App.tsx:18' } })], ctx);
     expect(p).toContain('   - Prop variant of <Button>: "primary" → "ghost"');

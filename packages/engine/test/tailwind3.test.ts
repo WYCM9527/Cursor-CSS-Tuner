@@ -68,6 +68,25 @@ describe('Tailwind 3 刻度', () => {
     expect(s.lineHeight.find((x) => x.token === 'tight')?.value).toBe('1.25');
     expect(s.shadow.find((x) => x.label === 'DEFAULT')?.token).toBe('');
     expect(s.breakpoints.map((b) => `${b.name}=${b.px}`)).toEqual(['sm=640', 'md=768', 'lg=1024', 'xl=1280', '2xl=1536']);
+    expect(s.fontFamily.map((x) => x.token)).toEqual(['sans', 'serif', 'mono']);
+    expect(s.fontFamily[0].value).toMatch(/^ui-sans-serif, system-ui, sans-serif, /);
+  });
+
+  it('字体：数组用逗号连起来，带 fontFeatureSettings 这类选项的只取字体', () => {
+    const { spaces } = namespaces({
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        display: [['"Playfair Display"', 'serif'], { fontFeatureSettings: '"ss01"' }],
+        body: ['"Source Sans 3", sans-serif', { fontVariationSettings: '"opsz" 32' }],
+        mono: 'Menlo, monospace',
+      },
+    } as never);
+    expect([...spaces.get('--font')!]).toEqual([
+      ['sans', 'Inter, sans-serif'],
+      ['display', '"Playfair Display", serif'],
+      ['body', '"Source Sans 3", sans-serif'],
+      ['mono', 'Menlo, monospace'],
+    ]);
   });
 
   it('断点来自 screens：字符串和 { min } 算，只有上限的、raw、数组不算', () => {

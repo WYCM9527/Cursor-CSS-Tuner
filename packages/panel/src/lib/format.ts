@@ -1,4 +1,4 @@
-import { backgroundLayers, formatNumber, gradientAngle, isGradient, parseColor, parseGradient, solidColorOf, t, toHex, type ElementSnapshot, type SelectionView } from '@css-tuner/protocol';
+import { backgroundLayers, formatNumber, gradientAngle, isGradient, parseColor, parseGradient, primaryFamily, solidColorOf, t, toHex, type ElementSnapshot, type SelectionView } from '@css-tuner/protocol';
 import { valuePx, type Ctx } from './scale';
 
 /** 字段当前值：有未应用的改动用改动值，否则用计算样式 */
@@ -44,6 +44,11 @@ export function displayValue(value: string): string {
   const layers = backgroundLayers(value);
   if (layers.some(isGradient)) return layers.map((l) => layerSummary(l)).join(' + ');
   return value;
+}
+
+/** 改动清单里的字体：变量只显示名字，字体栈只显示首选的字体 */
+export function fontValue(value: string): string {
+  return varName(value) ?? (primaryFamily(value) || value);
 }
 
 function layerSummary(layer: string): string {
