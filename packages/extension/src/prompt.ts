@@ -1,17 +1,13 @@
-import { t } from '@css-tuner/protocol';
+import { groupLabel, PROP_GROUPS, t } from '@css-tuner/protocol';
 import type { RecordBand } from './band';
 import type { ProjectResolver } from './project';
 import type { ChangeRecord } from './records';
 
 export interface HandoffContext {
-  pageUrl: string | null;
+  pageUrl: string;
   project: Pick<ProjectResolver, 'label'>;
-  /** Tailwind 项目的 CSS 入口（设计令牌所在文件），普通 CSS 项目为 null */
-  tailwindEntry: string | null;
-  /** 项目装的 tailwindcss 版本号 */
-  tailwindVersion?: string | null;
-  /** 设计令牌不在 CSS 入口里时（v3 的 tailwind.config）写的文件 */
-  tailwindTokens?: string | null;
+  /** Tailwind 项目：令牌写成「Tailwind 令牌 N」 */
+  tailwind: boolean;
 }
 
 function where(rec: ChangeRecord, project: HandoffContext['project']): string {
@@ -25,9 +21,24 @@ function where(rec: ChangeRecord, project: HandoffContext['project']): string {
   return parts.join(t('common.comma'));
 }
 
+/** 要改的代码就在元素那一行（元素自己的 className 之类），位置已经写在元素后面 */
+function atElement(rec: ChangeRecord): boolean {
+  const src = rec.element.source;
+  const { file, line } = rec.view;
+  return !!src && !!file && line === src.line && (!src.file || src.file === file);
+}
+
 function valueText(value: string, token: string | null, tailwind: boolean): string {
   if (!token || token === value) return value;
   return t(tailwind ? 'handoff.twToken' : 'handoff.token', { value, token });
+}
+
+/** 面板上的 padding-x 这类组名不是 CSS，换成逻辑属性 */
+const LOGICAL: Record<string, string> = { 'padding-x': 'padding-inline', 'padding-y': 'padding-block', 'margin-x': 'margin-inline', 'margin-y': 'margin-block' };
+
+function propsText(props: string[]): string {
+  const group = groupLabel(props);
+  return LOGICAL[group] ?? (group in PROP_GROUPS ? group : props.join(' / '));
 }
 
 function ruleText(rec: ChangeRecord): string | null {
@@ -47,83 +58,72 @@ function bandLine(b: RecordBand): string {
 /** 应用：照预览改进源码；还原：把之前应用的改回原样 */
 export type PromptMode = 'apply' | 'revert';
 
-/** 这一条要做的改动；back 是改回原样 */
+/** 这一条要做的改动；back 是改回原样，箭头反过来 */
 function changeLines(rec: ChangeRecord, tw: boolean, back: boolean): string[] {
+  const arrow = (from: string, to: string) => (back ? { from: to, to: from } : { from, to });
   switch (rec.kind) {
     case 'text': {
-      const from = JSON.stringify(rec.from);
-      const to = JSON.stringify(rec.to);
-      const lines = [back ? t('handoff.text.revert', { value: to, from }) : t('handoff.text', { from, to })];
+      const lines = [t('handoff.text', arrow(JSON.stringify(rec.from), JSON.stringify(rec.to)))];
       if (rec.detail?.origin) lines.push(t('handoff.text.origin', { origin: rec.detail.origin }));
       return lines;
     }
     case 'reorder': {
-      const lines = [back ? t('handoff.reorder.revert', { from: rec.from, to: rec.to }) : t('handoff.reorder', { from: rec.from, to: rec.to })];
+      const lines = [t('handoff.reorder', arrow(rec.from, rec.to))];
       const order = back ? rec.detail?.was : rec.detail?.order;
-      if (order?.length) lines.push(t(back ? 'handoff.reorder.was' : 'handoff.reorder.order', { order: order.join(t('common.listSep')) }));
+      if (order?.length) lines.push(t('handoff.reorder.order', { order: order.join(t('common.listSep')) }));
       return lines;
     }
     case 'prop': {
-      const component = rec.detail?.component ?? '?';
-      const name = rec.props[0] ?? rec.propLabel;
-      const lines = [back ? t('handoff.prop.revert', { component, name, value: rec.to, from: rec.from }) : t('handoff.prop', { component, name, from: rec.from, to: rec.to })];
+      const lines = [t('handoff.prop', { component: rec.detail?.component ?? '?', name: rec.props[0] ?? rec.propLabel, ...arrow(rec.from, rec.to) })];
       if (rec.detail?.site && rec.view.kind === 'agent') lines.push(t('handoff.prop.site', { site: rec.detail.site }));
       return lines;
     }
     default: {
-      if (rec.removal) return [back ? t('handoff.remove.revert', { props: rec.propLabel, from: rec.from }) : t('handoff.remove', { props: rec.propLabel, from: rec.from })];
-      const props = rec.props.join(' / ');
-      const value = valueText(rec.value, rec.token, tw);
-      return [back ? t('handoff.revertTo', { props, value, from: rec.from }) : t('handoff.change', { props, from: rec.from, to: value })];
+      if (rec.removal) return [t(back ? 'handoff.remove.revert' : 'handoff.remove', { props: rec.propLabel, from: rec.from })];
+      return [t('handoff.change', { props: propsText(rec.props), ...arrow(rec.from, valueText(rec.value, rec.token, tw)) })];
     }
   }
 }
 
 /**
- * 交给 Agent 的结构化提示词：每条写清元素在哪、原值 → 新值（还原时反过来）、管哪个宽度，
- * 只说要改成什么样，怎么写由 Agent 按项目的写法决定
+ * 改动之外要交代的：管哪个宽度、改在哪段代码、定位时知道的线索、再发一次时上一次的结果。
+ * 没有源码位置的元素，线索只是「找不到位置」，不写；渐变描边的说明是写法上的要求，总要写
+ */
+function contextLines(rec: ChangeRecord): string[] {
+  const lines: string[] = [];
+  if (rec.band) lines.push(bandLine(rec.band));
+  const rule = rec.kind === 'style' ? ruleText(rec) : null;
+  if (rule) lines.push(t('handoff.rule', { rule }));
+  else if (rec.view.kind !== 'agent' && rec.view.label && !atElement(rec)) lines.push(t('handoff.target', { label: rec.view.label }));
+  if (rec.write.kind === 'agent' && (rec.element.source || rec.decls)) lines.push(t('handoff.why', { why: rec.write.reason }));
+  if (rec.note && (rec.status === 'handoff' || rec.status === 'reverting')) lines.push(t('handoff.last', { note: rec.note }));
+  return lines;
+}
+
+/**
+ * 交给 Agent 的提示词：每一项是一个元素，写清在哪、原值 → 新值（还原时反过来）；
+ * 同一个元素上交代的东西都一样的几条改动合成一项。怎么写由 Agent 按项目的写法决定
  */
 export function buildPrompt(recs: ChangeRecord[], ctx: HandoffContext, mode: PromptMode = 'apply'): string {
-  const tw = !!ctx.tailwindEntry;
   const back = mode === 'revert';
-  const has = (kind: ChangeRecord['kind']) => recs.some((r) => r.kind === kind);
-  const lines: string[] = [];
-  lines.push(t(back ? 'handoff.revert.intro' : 'handoff.intro', { n: recs.length }));
-  lines.push('');
-  if (ctx.pageUrl) lines.push(t('handoff.page', { url: ctx.pageUrl }));
-  if (ctx.tailwindEntry && has('style')) {
-    const tailwind = ctx.tailwindVersion ? `Tailwind ${ctx.tailwindVersion}` : 'Tailwind';
-    lines.push(t('handoff.tailwind', { tailwind, file: ctx.project.label(ctx.tailwindTokens ?? ctx.tailwindEntry) }));
-  }
-  lines.push('');
-  recs.forEach((rec, i) => {
+  const items = new Map<string, { head: { label: string; loc: string; same: string }; changes: string[]; context: string[] }>();
+  for (const rec of recs) {
     const loc = where(rec, ctx.project);
-    lines.push(
-      t('handoff.element', {
-        i: i + 1,
-        label: rec.element.label,
-        loc: loc ? t('common.paren', { text: loc }) : '',
-        same: rec.view.affects > 1 ? t('handoff.sameSource', { n: rec.view.affects }) : '',
-      }),
-    );
-    lines.push(...changeLines(rec, tw, back));
-    if (rec.band) lines.push(bandLine(rec.band));
-    const rule = rec.kind === 'style' ? ruleText(rec) : null;
-    if (rule) lines.push(t('handoff.rule', { rule }));
-    else if (rec.view.label && rec.view.kind !== 'agent') lines.push(t('handoff.target', { label: rec.view.label }));
-    if (rec.write.kind === 'agent') lines.push(t('handoff.why', { why: rec.write.reason }));
-    // 再发一次：上一次改完页面上是什么样
-    if (rec.note && (rec.status === 'handoff' || rec.status === 'reverting')) lines.push(t('handoff.last', { note: rec.note }));
+    const head = {
+      label: rec.element.label,
+      loc: loc ? t('common.paren', { text: loc }) : '',
+      same: rec.view.affects > 1 ? t('handoff.sameSource', { n: rec.view.affects }) : '',
+    };
+    const context = contextLines(rec);
+    const key = [rec.preview.uid, head.label, head.loc, head.same, ...context].join('\n');
+    const item = items.get(key) ?? { head, changes: [], context };
+    item.changes.push(...changeLines(rec, ctx.tailwind, back));
+    items.set(key, item);
+  }
+  const lines = [t(back ? 'handoff.revert.intro' : 'handoff.intro', { url: ctx.pageUrl, n: items.size })];
+  [...items.values()].forEach((item, i) => {
+    lines.push('', t('handoff.element', { i: i + 1, ...item.head }), ...item.changes, ...item.context);
   });
-  lines.push('');
-  lines.push(t('handoff.requirements'));
-  lines.push(t(back ? 'handoff.req.revertOnly' : 'handoff.req.only'));
-  if (!back && has('style')) lines.push(t(tw ? 'handoff.req.twTokens' : 'handoff.req.cssVars'));
-  if (has('text')) lines.push(t('handoff.req.text'));
-  if (!back && has('reorder')) lines.push(t('handoff.req.reorder'));
-  if (has('prop')) lines.push(t('handoff.req.prop'));
-  if (!back && recs.some((r) => r.band)) lines.push(t(tw ? 'handoff.req.bandTw' : 'handoff.req.bandCss'));
-  lines.push(t('handoff.req.scope'));
-  lines.push(t('handoff.req.report'));
+  lines.push('', t('handoff.requirements'), t('handoff.req.sync'), t('handoff.req.report'));
   return lines.join('\n');
 }

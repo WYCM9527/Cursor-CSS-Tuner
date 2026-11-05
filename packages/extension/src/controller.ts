@@ -404,18 +404,8 @@ export class Controller implements vscode.Disposable {
 
   /** 交给 Agent 的提示词：recs 按改的先后排 */
   handoffPrompt(recs: ChangeRecord[], mode: PromptMode): string {
-    const entry = this.page ? tailwindEntry(this.page, this.project) : null;
-    return buildPrompt(
-      recs,
-      {
-        pageUrl: this.page?.url ?? recs[0].pageUrl,
-        project: this.project,
-        tailwindEntry: entry,
-        tailwindVersion: entry ? this.tailwind.versionFor(entry) : null,
-        tailwindTokens: this.design?.major === 3 ? (this.design.files[1] ?? null) : null,
-      },
-      mode,
-    );
+    const tailwind = !!this.page && !!tailwindEntry(this.page, this.project);
+    return buildPrompt(recs, { pageUrl: this.page?.url ?? recs[0].pageUrl, project: this.project, tailwind }, mode);
   }
 
   /* ---------- 静态页 ---------- */
