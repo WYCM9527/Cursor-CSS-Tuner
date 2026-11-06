@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.0
+
+- Pick a font: the Text section now starts with a Font field. It opens a searchable list of your theme's fonts (Tailwind's `font-*`, or CSS variables that hold a font stack in plain CSS projects), fonts the page loads with `@font-face`, fonts installed on your computer and generic families. Each name is shown in its own typeface, and hovering one or moving to it with the arrow keys previews it on the page. To use a font that isn't listed, type its name or a whole font stack.
+- When you pick a font that's only installed on your computer, the prompt says the page doesn't load it.
+- Installed fonts are read on your computer the first time you open the Font menu: from the system font manager on macOS, with PowerShell on Windows and with `fc-list` on Linux.
+- Closing a dropdown with Esc or a click elsewhere after hovering its options no longer leaves the field marked as changed.
+
 ## 0.10.1
 
 - Prompts for the Agent are much shorter. A prompt opens with the page, gives one item per element with where it is and each change as old value → new value (several changes to the same element share one item), and ends with just two requests: consider whether other affected places should change too, asking you when unsure, and list what was changed. The detailed instructions are gone, such as which tokens to prefer, how to write breakpoint prefixes or `@media`, and where to change props. Revert prompts use the same format with the arrows reversed.
