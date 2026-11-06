@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { t, type Crumb, type OrderView, type PanelToExt, type SelectionView } from '@css-tuner/protocol';
 import { boundary, nameOf } from '../lib/names';
-import { Section, targetHint } from './controls';
-import { Icon } from './icons';
+import { Section } from './controls';
 
 type Send = (m: PanelToExt) => void;
 
@@ -30,7 +29,7 @@ interface Drag {
 
 /**
  * 图层：祖先链 + 选中元素和它的兄弟 + 子元素，每行是通俗的叫法加文字开头；组件边界处标出组件名，点选切换、悬停在页面上描边。
- * 选中元素有可换序的兄弟时，兄弟行可以上下拖动换位置，下面一行也有上移 / 下移按钮
+ * 选中元素有可换序的兄弟时，兄弟行可以上下拖动换位置
  */
 export function Structure(props: { sel: SelectionView; send: Send; open: boolean; onToggle: (id: string) => void; onlyComponents: boolean; setOnlyComponents: (on: boolean) => void }) {
   const { sel, send, onlyComponents } = props;
@@ -157,8 +156,6 @@ export function Structure(props: { sel: SelectionView; send: Send; open: boolean
           kidRows
         )}
       </ul>
-      {order && <OrderRow uid={sel.el.uid} order={order} send={send} />}
-      <p className="sec-note">{t(order ? 'tree.hint.drag' : 'tree.hint')}</p>
     </Section>
   );
 }
@@ -171,41 +168,6 @@ function TreeLabel({ label, text }: { label: string; text?: string }) {
       <span className="tree-role">{name.role}</span>
       {name.detail && <span className={name.quoted ? 'tree-text' : 'tree-code'}>{name.detail}</span>}
     </span>
-  );
-}
-
-/** 在兄弟之间挪一位：竖排是上移 / 下移，横排是左移 / 右移 */
-function OrderRow({ uid, order, send }: { uid: string; order: OrderView; send: Send }) {
-  const n = order.items.length;
-  const hint = targetHint(order.target);
-  const btn = (d: -1 | 1) => {
-    const action = t(`panel.order.${d < 0 ? 'prev' : 'next'}.${order.axis}`);
-    const title = t('panel.order.title', { action, i: order.index + 1, n });
-    return (
-      <button className="mini" disabled={d < 0 ? order.index <= 0 : order.index >= n - 1} title={hint ? `${title}\n${hint}` : title} onClick={() => send({ t: 'reorder', uid, to: order.index + d, phase: 'commit' })}>
-        <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.5" style={order.axis === 'x' ? { transform: 'rotate(-90deg)' } : undefined}>
-          <path d={d < 0 ? 'M8 13V3M4 7l4-4 4 4' : 'M8 3v10M4 9l4 4 4-4'} />
-        </svg>
-        {action}
-      </button>
-    );
-  };
-  const reset = t('field.reset', { label: t('panel.change.order') });
-  return (
-    <div className="row order-row">
-      <span className="row-label">{t('panel.order')}</span>
-      <div className="row-fields">
-        <span className="order-pos">{t('panel.order.pos', { i: order.index + 1, n })}</span>
-        {btn(-1)}
-        {btn(1)}
-        {order.pending && (
-          <button className="icon-btn" title={reset} aria-label={reset} onClick={() => send({ t: 'resetOrder' })}>
-            <Icon.undo />
-          </button>
-        )}
-        {order.target.kind === 'agent' && <span className="nf-agent" title={order.target.reason ?? t('field.agent')} />}
-      </div>
-    </div>
   );
 }
 

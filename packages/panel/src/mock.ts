@@ -107,8 +107,6 @@ function stepLabel(m: PanelToExt, state: PanelState): (() => string) | null {
       return () => t('history.dropped', { label: t('panel.change.text') });
     case 'resetProp':
       return () => t('history.dropped', { label: m.name });
-    case 'resetOrder':
-      return () => t('history.dropped', { label: t('panel.change.order') });
     case 'discard': {
       const c = state.changes.find((x) => x.id === m.id);
       if (c?.status !== 'pending') return null;
@@ -630,17 +628,6 @@ export function createMockHost(): Host {
           item.pending = false;
         }
         state.changes = state.changes.filter((c) => !(c.status === 'pending' && c.id === `${uid}|prop|${m.name}`));
-        select(uid);
-        break;
-      }
-      case 'resetOrder': {
-        const uid = state.selection!.el.uid;
-        const o = orders[uid];
-        if (o) {
-          o.items.sort((a, b) => o.start.indexOf(a.uid) - o.start.indexOf(b.uid));
-          o.pending = false;
-        }
-        state.changes = state.changes.filter((c) => !(c.status === 'pending' && c.id === `${uid}|order`));
         select(uid);
         break;
       }

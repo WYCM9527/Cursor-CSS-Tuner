@@ -388,9 +388,6 @@ export class Controller implements vscode.Disposable {
       case 'resetProp':
         await this.resetProp(msg.name);
         return;
-      case 'resetOrder':
-        await this.resetOrder();
-        return;
       case 'reload':
         if (this.session) await this.browser.reload(this.session.browserId);
         return;
@@ -1663,12 +1660,6 @@ export class Controller implements vscode.Disposable {
       const p = this.propPlans.get(name);
       return el && p ? [this.journal.findPending(propKey(p, el, name))] : [];
     });
-  }
-
-  /** 重置兄弟组的换序 */
-  resetOrder(): Promise<void> {
-    this.liveOrder = null;
-    return this.reset(() => [this.orderPlan ? this.journal.findPending(this.orderPlan.key) : undefined]);
   }
 
   private reset(pick: () => Array<ChangeRecord | undefined>): Promise<void> {

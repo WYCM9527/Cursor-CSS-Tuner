@@ -961,27 +961,6 @@ select {
   box-shadow: var(--chip-shadow);
 }
 
-.order-row {
-  margin-top: 2px;
-}
-
-.order-row .row-fields {
-  align-items: center;
-  min-height: var(--row);
-  gap: 2px;
-}
-
-.order-pos {
-  margin-right: auto;
-  font-size: 11px;
-  color: var(--fg-2);
-  white-space: nowrap;
-}
-
-.order-row .mini:disabled {
-  opacity: 0.35;
-}
-
 /* ---------- 分区 ---------- */
 
 .sec {

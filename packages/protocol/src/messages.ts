@@ -618,11 +618,10 @@ export type PanelToExt =
   | { t: 'editProp'; name: string; value: PropValue; phase: 'live' | 'commit' }
   /** 刷新页面（让钩子赶在 React 之前挂上，才能预览 props） */
   | { t: 'reload' }
-  /** 重置：放弃选中元素上这些属性 / 这段文字 / 这个 prop / 换序的未应用改动 */
+  /** 重置：放弃选中元素上这些属性 / 这段文字 / 这个 prop 的未应用改动 */
   | { t: 'resetProps'; props: string[] }
   | { t: 'resetText'; segment: number }
   | { t: 'resetProp'; name: string }
-  | { t: 'resetOrder' }
   /** 应用：整理成提示词预填进新的 Agent 对话。不给 ids 是全部未应用的；给了 ids 时，还在等 Agent 改的那几条再发一次 */
   | { t: 'apply'; ids?: string[] }
   /** 还原：交给 Agent 改回原样（还在等它还原的再发一次） */
