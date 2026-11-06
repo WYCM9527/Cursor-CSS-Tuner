@@ -307,8 +307,8 @@ export function Inspector({ state, sel, prefs, setPrefs, edit, editText, editPro
             value={isFlex ? 'flex' : isGrid ? 'grid' : display}
             options={[
               { value: 'block', label: t('insp.display.block'), title: t('insp.display.block.title') },
-              { value: 'flex', label: 'Flex', title: t('insp.display.flex.title') },
-              { value: 'grid', label: 'Grid', title: t('insp.display.grid.title') },
+              { value: 'flex', label: t('insp.display.flex'), title: t('insp.display.flex.title') },
+              { value: 'grid', label: t('insp.display.grid'), title: t('insp.display.grid.title') },
               { value: 'inline-block', label: t('insp.display.inline'), title: t('insp.display.inline.title') },
               { value: 'none', label: t('insp.display.none'), title: t('insp.display.none.title') },
             ]}
