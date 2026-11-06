@@ -3,6 +3,7 @@ import { angleDir, colorAt, effectiveInterp, formatGradient, gradientAngle, pars
 import { varName } from '../lib/format';
 import { kindOf, pinInterp, type Paint, type PaintKind } from '../lib/paint';
 import { ColorEditor, hexOf, matchStep, resolveColor } from './ColorField';
+import { agentHint } from './controls';
 import type { Edit } from './types';
 
 export interface PaintFieldProps {
@@ -30,12 +31,10 @@ const shownGradient = (g: Gradient, steps: ScaleStep[] | null): Gradient => ({ .
 
 export function PaintField(p: PaintFieldProps) {
   const [open, setOpen] = useState(false);
-  const agent = p.target?.kind === 'agent';
   return (
     <div className={`cf${p.pending ? ' is-pending' : ''}`}>
       <button className="cf-row" onClick={() => setOpen((v) => !v)} title={tip(p)} aria-expanded={open}>
         <PaintRow paint={p.paint} steps={p.steps} declared={p.declared ?? null} />
-        {agent && <span className="nf-agent" title={p.target?.reason ?? t('field.agent')} />}
       </button>
       {p.corner}
       {p.note && <div className="cf-note">{p.note}</div>}
@@ -80,6 +79,8 @@ function tip(p: PaintFieldProps): string {
   if (p.target) {
     const affects = p.target.affects > 1 ? t('common.paren', { text: t('field.affects', { n: p.target.affects }) }) : '';
     lines.push(`${t('field.writeTo', { label: p.target.label })}${affects}`);
+    const why = agentHint(p.target);
+    if (why) lines.push(why);
   }
   if (p.paint.kind === 'complex') lines.push(t('paint.complex'));
   return lines.join('\n');

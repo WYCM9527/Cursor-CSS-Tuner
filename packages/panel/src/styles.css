@@ -1212,16 +1212,6 @@ select {
   background: var(--ink);
 }
 
-/* 交给 Agent 的标记统一用四角星，和按钮上的图标一致 */
-.nf-agent {
-  flex: none;
-  width: 9px;
-  height: 9px;
-  margin: 0 4px 0 1px;
-  background: var(--fg-2);
-  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
-}
-
 .ruler {
   position: absolute;
   z-index: 20;
@@ -1486,10 +1476,6 @@ select {
   background: var(--chip);
   box-shadow: var(--chip-shadow);
   color: var(--fg);
-}
-
-.seg .nf-agent {
-  align-self: center;
 }
 
 /* 纵向主轴：分布图标顺时针转，对齐图标逆时针转 */

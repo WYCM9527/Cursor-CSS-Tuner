@@ -157,7 +157,6 @@ function PropText({ view, onEdit, corner }: { view: PropView; onEdit: OnEdit; co
     setText(null);
   };
 
-  const agent = view.target.kind === 'agent';
   return (
     <div className={`nf tf${view.pending ? ' is-pending' : ''}`} title={targetHint(view.target)}>
       <input
@@ -187,7 +186,6 @@ function PropText({ view, onEdit, corner }: { view: PropView; onEdit: OnEdit; co
           }
         }}
       />
-      {agent && <span className="nf-agent" title={view.target.reason ?? t('field.agent')} />}
       {corner}
     </div>
   );

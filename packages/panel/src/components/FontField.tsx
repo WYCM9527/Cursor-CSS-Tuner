@@ -177,7 +177,6 @@ export function FontField(props: {
     }
   };
 
-  const agent = props.target?.kind === 'agent';
   let index = typed ? 1 : 0;
   const row = (item: Item, i: number) => (
     <button
@@ -202,7 +201,6 @@ export function FontField(props: {
         <span className="sel-value" style={{ fontFamily: `${props.value}, ${UI_FONT}` }}>
           {props.display}
         </span>
-        {agent && <span className="nf-agent" title={props.target?.reason ?? t('field.agent')} />}
         <Chevron open={open} />
       </button>
       {open && (

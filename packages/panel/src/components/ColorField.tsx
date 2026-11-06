@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { hsvToRgb, parseColor, rgbToHsv, sameColor, t, toHex, type Hsva, type ScaleStep, type Target } from '@css-tuner/protocol';
 import { varName } from '../lib/format';
+import { agentHint } from './controls';
 import type { Edit } from './types';
 
 export interface ColorFieldProps {
@@ -40,14 +41,12 @@ export function ColorField(p: ColorFieldProps) {
   const shown = resolveColor(p.value, p.steps);
   const step = matchStep(p.steps, shown);
   const label = varName(p.value) ?? p.declared ?? step?.label ?? hexOf(shown);
-  const agent = p.target?.kind === 'agent';
   return (
     <div className={`cf${p.pending ? ' is-pending' : ''}`}>
       <button className="cf-row" onClick={() => setOpen((v) => !v)} title={tip(p)} aria-expanded={open}>
         <span className="swatch" style={{ ['--c' as string]: shown }} />
         <span className="cf-label">{label}</span>
         {label !== hexOf(shown) && parseColor(shown) && <span className="cf-hex">{hexOf(shown)}</span>}
-        {agent && <span className="nf-agent" title={p.target?.reason ?? t('field.agent')} />}
       </button>
       {p.corner}
       {open && <ColorPicker value={shown} steps={p.steps} onEdit={p.onEdit} onClose={() => setOpen(false)} />}
@@ -60,6 +59,8 @@ function tip(p: ColorFieldProps): string {
   if (p.target) {
     const affects = p.target.affects > 1 ? t('common.paren', { text: t('field.affects', { n: p.target.affects }) }) : '';
     lines.push(`${t('field.writeTo', { label: p.target.label })}${affects}`);
+    const why = agentHint(p.target);
+    if (why) lines.push(why);
   }
   return lines.join('\n');
 }

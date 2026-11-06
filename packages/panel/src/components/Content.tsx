@@ -55,10 +55,7 @@ function TextRow({ view, onEdit, onReset }: { view: TextView; onEdit: (value: st
     <div className={`tx${view.pending ? ' is-pending' : ''}`}>
       <div className="tx-head" title={targetHint(view.target)}>
         {agent ? (
-          <>
-            <span className="tx-where">{t('insp.text.origin.dynamic')}</span>
-            <span className="nf-agent" title={view.target.reason ?? t('field.agent')} />
-          </>
+          <span className="tx-where">{t('insp.text.origin.dynamic')}</span>
         ) : (
           <>
             <span className="tx-where">{t(`insp.text.origin.${view.origin}`)}</span>

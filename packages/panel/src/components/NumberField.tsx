@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { formatNumber, t, type ScaleStep, type Target } from '@css-tuner/protocol';
 import { nearest, ordered, valuePx, walk, type Ctx } from '../lib/scale';
+import { agentHint } from './controls';
 import type { Edit } from './types';
 
 export interface NumberFieldProps {
@@ -157,7 +158,6 @@ export function NumberField(p: NumberFieldProps) {
   };
 
   const shown = text ?? (mixed ? '' : curPx === null ? first : fmt(curPx, stepSize));
-  const agent = p.target?.kind === 'agent';
 
   return (
     <div className={`nf${p.pending ? ' is-pending' : ''}${drag ? ' is-dragging' : ''}`} title={hint(p)}>
@@ -184,7 +184,6 @@ export function NumberField(p: NumberFieldProps) {
         aria-label={p.title}
       />
       {(drag?.label ?? token) && !drag?.exact && <span className="nf-token">{drag?.label ?? token}</span>}
-      {agent && <span className="nf-agent" title={p.target?.reason ?? t('field.agent')} />}
       {!drag && p.corner}
       {drag && <Ruler seq={seq} px={drag.px} exact={drag.exact} unit={unit} stepSize={stepSize} />}
     </div>
@@ -196,6 +195,8 @@ function hint(p: NumberFieldProps): string {
   if (p.target) {
     lines.push(t('field.writeTo', { label: p.target.label }));
     if (p.target.affects > 1) lines.push(t('field.affects', { n: p.target.affects }));
+    const why = agentHint(p.target);
+    if (why) lines.push(why);
   }
   lines.push(p.snap ? t('field.dragHint.snap') : t('field.dragHint'));
   return lines.join('\n');

@@ -88,7 +88,6 @@ export interface SegOption {
 }
 
 export function Segmented(props: { value: string; options: SegOption[]; pending?: boolean; target?: Target; className?: string; corner?: ReactNode; onPick: (v: string) => void }) {
-  const agent = props.target?.kind === 'agent';
   return (
     <div className={`seg${props.pending ? ' is-pending' : ''}${props.className ? ` ${props.className}` : ''}`} role="radiogroup" title={targetHint(props.target)}>
       {props.options.map((o) => (
@@ -96,7 +95,6 @@ export function Segmented(props: { value: string; options: SegOption[]; pending?
           {o.label}
         </button>
       ))}
-      {agent && <span className="nf-agent" title={props.target?.reason ?? t('field.agent')} />}
       {props.corner}
     </div>
   );
@@ -104,8 +102,16 @@ export function Segmented(props: { value: string; options: SegOption[]; pending?
 
 export function targetHint(target: Target | undefined): string | undefined {
   if (!target) return undefined;
-  const to = t('field.writeTo', { label: target.label });
-  return target.affects > 1 ? `${to}\n${t('field.affects', { n: target.affects })}` : to;
+  const lines = [t('field.writeTo', { label: target.label })];
+  if (target.affects > 1) lines.push(t('field.affects', { n: target.affects }));
+  const why = agentHint(target);
+  if (why) lines.push(why);
+  return lines.join('\n');
+}
+
+/** 由 Agent 找位置的字段：悬停时说明为什么 */
+export function agentHint(target: Target | undefined): string | null {
+  return target?.kind === 'agent' ? (target.reason ?? t('field.agent')) : null;
 }
 
 /** 下拉选择：悬停选项即预览，点选提交，Esc 或点外面恢复打开前的值 */
@@ -146,12 +152,10 @@ export function SelectField(props: {
     };
   });
 
-  const agent = props.target?.kind === 'agent';
   return (
     <div className={`sel${props.pending ? ' is-pending' : ''}`} ref={box}>
-      <button className="sel-btn" onClick={() => (open ? close(true) : setOpen(true))} title={props.title} aria-expanded={open}>
+      <button className="sel-btn" onClick={() => (open ? close(true) : setOpen(true))} title={[props.title, targetHint(props.target)].filter(Boolean).join('\n')} aria-expanded={open}>
         <span className="sel-value">{props.display}</span>
-        {agent && <span className="nf-agent" title={props.target?.reason ?? t('field.agent')} />}
         <Chevron open={open} />
       </button>
       {open && (
@@ -232,7 +236,6 @@ export function SliderField(props: {
 export function TextField(props: { title: string; value: string; pending: boolean; target?: Target; corner?: ReactNode; onCommit: (v: string) => void }) {
   const [text, setText] = useState<string | null>(null);
   const cancelled = useRef(false);
-  const agent = props.target?.kind === 'agent';
   const commit = () => {
     const v = text?.trim();
     if (!cancelled.current && v && v !== props.value) props.onCommit(v);
@@ -256,7 +259,6 @@ export function TextField(props: { title: string; value: string; pending: boolea
           }
         }}
       />
-      {agent && <span className="nf-agent" title={props.target?.reason ?? t('field.agent')} />}
       {props.corner}
     </div>
   );
