@@ -390,7 +390,6 @@ export const zhCN: Record<keyof typeof en, string> = {
   'insp.props.unset': '未设置',
   'insp.props.readonly': '这类值只能在代码里改',
   'insp.props.empty': '这个组件没有收到可以改的属性。',
-  'insp.props.hint': '文字和数字改完按回车，Esc 取消。',
   'insp.layout': '布局',
   'insp.display': '排列',
   'insp.display.block': '整行',

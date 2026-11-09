@@ -387,7 +387,6 @@ export const en = {
   'insp.props.unset': 'not set',
   'insp.props.readonly': 'Values like this can only be changed in the code',
   'insp.props.empty': "This component didn't receive any props that can be edited here.",
-  'insp.props.hint': 'For text and numbers, press Enter when you’re done, Esc to cancel.',
   'insp.layout': 'Layout',
   'insp.display': 'Display',
   'insp.display.block': 'Block',

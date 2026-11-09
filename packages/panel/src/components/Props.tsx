@@ -22,7 +22,6 @@ export function Props(props: { sel: SelectionView; ctx: Ctx; open: boolean; onTo
   ) : (
     <span className="pp-site">{tag}</span>
   );
-  const typed = view.items.some((x) => !x.options?.length && (x.type === 'string' || x.type === 'number'));
   return (
     <Section id="props" title={t('insp.props')} open={props.open} onToggle={props.onToggle} aside={aside}>
       {view.server && <p className="sec-note">{t('insp.props.server')}</p>}
@@ -44,7 +43,6 @@ export function Props(props: { sel: SelectionView; ctx: Ctx; open: boolean; onTo
         />
       ))}
       {!view.items.length && <p className="sec-note">{t('insp.props.empty')}</p>}
-      {typed && <p className="sec-note">{t('insp.props.hint')}</p>}
     </Section>
   );
 }
