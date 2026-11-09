@@ -1105,11 +1105,12 @@ select {
 
 .cf,
 .seg,
-.slider {
+.slider,
+.tx {
   position: relative;
 }
 
-.app :is(.cf, .sel, .seg, .slider) > .corner {
+.app :is(.cf, .sel, .seg, .slider, .tx) > .corner {
   position: absolute;
   top: -6px;
   right: -6px;

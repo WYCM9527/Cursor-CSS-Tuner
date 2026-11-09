@@ -15,7 +15,6 @@ export function Content(props: { sel: SelectionView; open: boolean; onToggle: (i
       {texts.map((x) => (
         <TextRow key={`${props.sel.el.uid}:${x.segment}`} view={x} onEdit={(value, phase) => props.editText(x.segment, value, phase)} onReset={() => props.resetText(x.segment)} />
       ))}
-      <p className="sec-note">{t('insp.text.hint')}</p>
     </Section>
   );
 }
@@ -50,20 +49,18 @@ function TextRow({ view, onEdit, onReset }: { view: TextView; onEdit: (value: st
     setText(null);
   };
 
-  const agent = view.target.kind === 'agent';
+  const { origin } = view;
+  const dynamic = origin === 'dynamic';
+  const corner = <Corner label={t('panel.change.text')} pending={view.pending} onReset={onReset} />;
   return (
     <div className={`tx${view.pending ? ' is-pending' : ''}`}>
-      <div className="tx-head" title={targetHint(view.target)}>
-        {agent ? (
-          <span className="tx-where">{t('insp.text.origin.dynamic')}</span>
-        ) : (
-          <>
-            <span className="tx-where">{t(`insp.text.origin.${view.origin}`)}</span>
-            <span className="tx-target">{view.target.label}</span>
-          </>
-        )}
-        <Corner label={t('panel.change.text')} pending={view.pending} onReset={onReset} />
-      </div>
+      {!dynamic && (
+        <div className="tx-head" title={targetHint(view.target)}>
+          <span className="tx-where">{t(`insp.text.origin.${origin}`)}</span>
+          <span className="tx-target">{view.target.label}</span>
+          {corner}
+        </div>
+      )}
       <textarea
         ref={area}
         className="tx-input"
@@ -71,6 +68,7 @@ function TextRow({ view, onEdit, onReset }: { view: TextView; onEdit: (value: st
         value={shown}
         spellCheck={false}
         aria-label={t('insp.content')}
+        title={dynamic ? targetHint(view.target) : undefined}
         onFocus={() => {
           start.current = view.value;
         }}
@@ -95,6 +93,7 @@ function TextRow({ view, onEdit, onReset }: { view: TextView; onEdit: (value: st
           }
         }}
       />
+      {dynamic && corner}
     </div>
   );
 }

@@ -380,8 +380,6 @@ export const zhCN: Record<keyof typeof en, string> = {
   'insp.text.origin.prop': '来自组件属性：',
   'insp.text.origin.message': '来自翻译文件：',
   'insp.text.origin.html': '写在 HTML 文件里：',
-  'insp.text.origin.dynamic': '这段文字是代码生成的，改动会交给 Agent',
-  'insp.text.hint': '改完按回车，Esc 取消；点「全部应用」交给 Agent 后才会改到代码里。也可以在页面上双击文字直接改。',
   'insp.props': '组件属性',
   'insp.props.site': '打开用到它的地方 {label}',
   'insp.props.same': '页面上有 {n} 个出自同一行代码，会一起变',
