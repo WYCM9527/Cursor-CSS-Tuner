@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.1
+
+- Fewer hints and markers in the panel:
+  - Layers no longer shows the element's position with Move up / Move down and a reset button, or the hint under the tree. To reorder, drag the element's row in Layers or the handle next to its tag on the page.
+  - Fields the Agent has to find in your code no longer have a star after the value. Hover the field to see why, below where the change goes. Dropdowns now show where the change goes too.
+  - The hints about Enter and Esc at the end of the Content and Props sections are gone, and so is the note above text produced by code. That text's reset button now sits on the corner of its box.
+- Clearer Chinese names for the Display options: 整行, 弹性, 网格, 并排 and 隐藏 (whole line, flex, grid, side by side, hidden). In both languages, each option's tooltip says what it does, for example that flex works like auto layout in Figma.
+
 ## 0.11.0
 
 - Pick a font: the Text section now starts with a Font field. It opens a searchable list of your theme's fonts (Tailwind's `font-*`, or CSS variables that hold a font stack in plain CSS projects), fonts the page loads with `@font-face`, fonts installed on your computer and generic families. Each name is shown in its own typeface, and hovering one or moving to it with the arrow keys previews it on the page. To use a font that isn't listed, type its name or a whole font stack.
