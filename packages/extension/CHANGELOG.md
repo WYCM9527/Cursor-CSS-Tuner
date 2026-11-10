@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.0
+
+- The panel's toolbar is down to Pick Element and the ruler:
+  - The Viewport menu is gone: the panel no longer shows the page at phone, tablet or desktop width, or limits a change to one range of widths. Changes limited that way before this update are handed off without the range.
+  - *Snap to theme values* and its setting `cssTuner.snap` are gone. Dragging a number or pressing ↑ / ↓ changes it by one step (ten with Shift), and no scale shows under the field while you drag. A value that matches your theme still shows its token next to it.
+
 ## 0.11.1
 
 - Fewer hints and markers in the panel:
