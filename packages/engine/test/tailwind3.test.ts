@@ -67,7 +67,6 @@ describe('Tailwind 3 刻度', () => {
     expect(s.lineHeight.filter((x) => x.token === '6')).toHaveLength(1);
     expect(s.lineHeight.find((x) => x.token === 'tight')?.value).toBe('1.25');
     expect(s.shadow.find((x) => x.label === 'DEFAULT')?.token).toBe('');
-    expect(s.breakpoints.map((b) => `${b.name}=${b.px}`)).toEqual(['sm=640', 'md=768', 'lg=1024', 'xl=1280', '2xl=1536']);
     expect(s.fontFamily.map((x) => x.token)).toEqual(['sans', 'serif', 'mono']);
     expect(s.fontFamily[0].value).toMatch(/^ui-sans-serif, system-ui, sans-serif, /);
   });
@@ -86,16 +85,6 @@ describe('Tailwind 3 刻度', () => {
       ['display', '"Playfair Display", serif'],
       ['body', '"Source Sans 3", sans-serif'],
       ['mono', 'Menlo, monospace'],
-    ]);
-  });
-
-  it('断点来自 screens：字符串和 { min } 算，只有上限的、raw、数组不算', () => {
-    const { spaces } = namespaces({
-      screens: { sm: '640px', tablet: { min: '700px', max: '900px' }, narrow: { max: '500px' }, print: { raw: 'print' }, multi: ['1400px'] },
-    } as never);
-    expect([...spaces.get('--breakpoint')!]).toEqual([
-      ['sm', '640px'],
-      ['tablet', '700px'],
     ]);
   });
 

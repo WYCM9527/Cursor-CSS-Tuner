@@ -1,4 +1,4 @@
-import { DEFAULT_BREAKPOINTS, toPx, type CssVar, type MeasureStep, type PageInfo, type Scales, type ScaleStep } from '@css-tuner/protocol';
+import { toPx, type CssVar, type MeasureStep, type PageInfo, type Scales, type ScaleStep } from '@css-tuner/protocol';
 
 const WEIGHTS: Array<[string, string]> = [
   ['thin', '100'],
@@ -29,7 +29,6 @@ export function emptyScales(rem: number, mode: Scales['mode'] = 'css'): Scales {
     opacity: [],
     zIndex: [],
     borderWidth: [],
-    breakpoints: DEFAULT_BREAKPOINTS,
   };
 }
 

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { existsSync, readFileSync, readdirSync, rmdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import WebSocket from 'ws';
-import { getLocale, localeFrom, type PanelToExt, type PropValue, type SelectionView, type ViewportPreset } from '@css-tuner/protocol';
+import { getLocale, localeFrom, type PanelToExt, type PropValue, type SelectionView } from '@css-tuner/protocol';
 import type { Controller } from './controller';
 import { summarizeCheck } from './selfcheck';
 
@@ -621,26 +621,6 @@ defineStep('viewport', async (c, s) => {
   else await c.browser.cdp(id, 'Emulation.setDeviceMetricsOverride', { width: Number(s.width) || 1280, height: Number(s.height) || 800, deviceScaleFactor: Number(s.scale) || 1, mobile: false });
   await new Promise((r) => setTimeout(r, 300));
   return c.browser.exec(id, 'innerWidth + "x" + innerHeight');
-});
-
-const pageWidth = (c: Controller) =>
-  c.browser.exec<{ w: number; h: number; md: boolean; lg: boolean; dpr: number }>(
-    c.session!.browserId,
-    `({ w: innerWidth, h: innerHeight, md: matchMedia('(min-width: 768px)').matches, lg: matchMedia('(min-width: 1024px)').matches, dpr: devicePixelRatio })`,
-  );
-
-/** 面板上选视口的一档（actual 还原）：返回面板上的状态和页面上的宽度、断点是否生效 */
-defineStep('viewportPreset', async (c, s) => {
-  await c.handle({ t: 'setViewport', preset: String(s.preset) as ViewportPreset });
-  await new Promise((r) => setTimeout(r, 300));
-  return { preset: c.state.viewport.preset, bands: c.state.viewport.bands, page: await pageWidth(c) };
-});
-
-/** 面板收起 / 展开（visible: false / true） */
-defineStep('panelVisible', async (c, s) => {
-  c.panelVisible(s.visible !== false);
-  await new Promise((r) => setTimeout(r, 400));
-  return { preset: c.state.viewport.preset, page: await pageWidth(c) };
 });
 
 /** 打印第一处包含 find 的行起的 count 行 */

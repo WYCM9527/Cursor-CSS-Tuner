@@ -3,7 +3,6 @@ export * from './values';
 export * from './color';
 export * from './gradient';
 export * from './assets';
-export * from './viewport';
 export * from './messages';
 export * from './selectors';
 export * from './cssprops';

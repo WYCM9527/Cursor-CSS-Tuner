@@ -151,13 +151,6 @@ export const Icon = {
       <path d="M4 5v2M6.5 5v3M9 5v2M11.5 5v3" />
     </svg>
   ),
-  viewport: () => (
-    <svg {...S}>
-      <rect x="1.5" y="3" width="9" height="6.5" rx="1" />
-      <path d="M4 13h4M6 9.5V13" />
-      <rect x="11.5" y="5" width="3" height="8" rx="0.8" />
-    </svg>
-  ),
   download: () => (
     <svg {...S}>
       <path d="M8 2v8M4.5 6.5L8 10l3.5-3.5M2.5 13.5h11" />

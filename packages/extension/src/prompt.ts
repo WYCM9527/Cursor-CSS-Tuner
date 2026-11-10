@@ -1,5 +1,4 @@
 import { groupLabel, PROP_GROUPS, t } from '@css-tuner/protocol';
-import type { RecordBand } from './band';
 import type { ProjectResolver } from './project';
 import type { ChangeRecord } from './records';
 
@@ -48,13 +47,6 @@ function ruleText(rec: ChangeRecord): string | null {
   return `${cond ? `${cond} ` : ''}${r.fullSelector}`;
 }
 
-/** 只改视口一档的改动管的宽度范围 */
-function bandLine(b: RecordBand): string {
-  if (b.min <= 0 && b.max !== null) return t('handoff.band.below', { max: b.max });
-  if (b.max === null) return t('handoff.band.above', { min: b.min });
-  return t('handoff.band.between', { min: b.min, last: b.max - 1 });
-}
-
 /** 应用：照预览改进源码；还原：把之前应用的改回原样 */
 export type PromptMode = 'apply' | 'revert';
 
@@ -88,12 +80,11 @@ function changeLines(rec: ChangeRecord, tw: boolean, back: boolean): string[] {
 }
 
 /**
- * 改动之外要交代的：管哪个宽度、改在哪段代码、定位时知道的线索、再发一次时上一次的结果。
+ * 改动之外要交代的：改在哪段代码、定位时知道的线索、再发一次时上一次的结果。
  * 没有源码位置的元素，线索只是「找不到位置」，不写；渐变描边的说明是写法上的要求，总要写
  */
 function contextLines(rec: ChangeRecord): string[] {
   const lines: string[] = [];
-  if (rec.band) lines.push(bandLine(rec.band));
   const rule = rec.kind === 'style' ? ruleText(rec) : null;
   if (rule) lines.push(t('handoff.rule', { rule }));
   else if (rec.view.kind !== 'agent' && rec.view.label && !atElement(rec)) lines.push(t('handoff.target', { label: rec.view.label }));

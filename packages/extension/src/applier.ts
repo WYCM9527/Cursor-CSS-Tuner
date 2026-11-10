@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
-import { t, type ViewportBand } from '@css-tuner/protocol';
+import { t } from '@css-tuner/protocol';
 import type { Controller } from './controller';
 import type { ChangeRecord } from './journal';
 import { prefill } from './handoff';
@@ -238,19 +238,8 @@ export class Applier implements vscode.Disposable {
     await this.reloadSheets();
     const recs = c.journal.waiting().filter((r) => c.samePage(r.pageUrl, page.url));
     if (!recs.length) return;
-    const shown = recs.some((r) => r.band) ? await c.bandNow() : null;
     let done = 0;
-    for (const rec of recs) if ((!rec.band || rec.band.name === shown) && (await this.check(rec, settled))) done++;
-    // 只改别的档的：文件改完一阵了再临时切到那一档的宽度核对，免得 Agent 改着改着页面宽度来回跳
-    if (settled) {
-      const later = new Map<ViewportBand, ChangeRecord[]>();
-      for (const r of recs) if (r.band && r.band.name !== shown) later.set(r.band.name, [...(later.get(r.band.name) ?? []), r]);
-      for (const [band, list] of later) {
-        await c.atBand(band, async () => {
-          for (const rec of list) if (await this.check(rec, true)) done++;
-        });
-      }
-    }
+    for (const rec of recs) if (await this.check(rec, settled)) done++;
     if (done) {
       c.log(t('apply.matchedLog', { n: done }));
       await c.refreshSelection();
@@ -291,7 +280,7 @@ export class Applier implements vscode.Disposable {
       finish();
       return true;
     }
-    if (!back && !r.attached && (r.found || rec.preview.kind === 'rule') && c.visible(rec)) {
+    if (!back && !r.attached && (r.found || rec.preview.kind === 'rule')) {
       // 同一处后来又改了的也重新挂一遍，盖在这条上面
       const above = c.journal.previewing().filter((x) => x.key === rec.key && x.createdAt > rec.createdAt);
       for (const x of [rec, ...above.reverse()]) await c.showPreview(x);

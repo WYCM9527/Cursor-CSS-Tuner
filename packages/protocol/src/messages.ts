@@ -506,24 +506,6 @@ export interface Scales {
   borderWidth: ScaleStep[];
   /** 新建渐变的插值色彩空间：Tailwind 4 的渐变工具类都带 in oklab，预览照着写才和应用后一样 */
   gradientIn?: string;
-  /** 断点（按宽度从小到大）：Tailwind 是主题里的 screens，普通 CSS 项目用 md 768、lg 1024 */
-  breakpoints: Breakpoint[];
-}
-
-export interface Breakpoint {
-  name: string;
-  px: number;
-}
-
-/** 视口：实际宽度，或按手机、平板（md 起）、桌面（lg 起）的宽度显示页面 */
-export type ViewportPreset = 'actual' | 'mobile' | 'tablet' | 'desktop';
-
-export type ViewportBand = Exclude<ViewportPreset, 'actual'>;
-
-export interface ViewportView {
-  preset: ViewportPreset;
-  /** 每一档模拟的宽度；prefix 是这一档在 Tailwind 里的断点前缀（手机是不带前缀的基础样式，普通 CSS 项目都为 null） */
-  bands: Record<ViewportBand, { width: number; prefix: string | null }>;
 }
 
 /** 未应用 → 交给 Agent 等它改（handoff）→ 页面上核对上了（applied）→ 交给 Agent 还原（reverting）→ 核对上原样（reverted） */
@@ -571,7 +553,6 @@ export interface PanelState {
   pickOn: boolean;
   /** 标尺开着 */
   measureOn: boolean;
-  viewport: ViewportView;
   scope: Scope;
   selection: SelectionView | null;
   scales: Scales | null;
@@ -601,7 +582,6 @@ export type PanelToExt =
   | { t: 'openPage'; url: string }
   | { t: 'pick'; on: boolean }
   | { t: 'measure'; on: boolean }
-  | { t: 'setViewport'; preset: ViewportPreset }
   | { t: 'select'; uid: string }
   | { t: 'hover'; uid: string | null }
   | { t: 'edit'; edit: EditRequest }

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { changeName, t, type ChangeView, type Locale, type PanelState, type PanelToExt, type Scope, type SelectionView, type ViewportPreset } from '@css-tuner/protocol';
+import { useEffect, useState } from 'react';
+import { changeName, t, type ChangeView, type Locale, type PanelState, type PanelToExt, type Scope, type SelectionView } from '@css-tuner/protocol';
 import { displayValue, fontValue, shortFile } from '../lib/format';
 import { boundary, nameOf } from '../lib/names';
 import { IconToggle } from './controls';
@@ -39,76 +39,11 @@ export function Toolbar({ state, send }: { state: PanelState; send: Send }) {
           <IconToggle on={state.measureOn} title={state.measureOn ? t('panel.measure.on') : t('panel.measure.off')} onClick={() => send({ t: 'measure', on: !state.measureOn })}>
             <Icon.ruler />
           </IconToggle>
-          <ViewportMenu state={state} send={send} />
           <IconToggle on={state.snap} title={state.snap ? t('panel.snap.on') : t('panel.snap.off')} onClick={() => send({ t: 'setSnap', on: !state.snap })}>
             <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.3">
               <path d="M2 12h12M4 12V9M7 12V6M10 12V9M13 12V4" />
             </svg>
           </IconToggle>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const PRESETS: ViewportPreset[] = ['actual', 'mobile', 'tablet', 'desktop'];
-
-/** 视口：按手机、平板、桌面的宽度看页面；选了一档时按钮上写着是哪一档 */
-function ViewportMenu({ state, send }: { state: PanelState; send: Send }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: PointerEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('pointerdown', onDown, true);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('pointerdown', onDown, true);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-  const { preset, bands } = state.viewport;
-  const active = preset !== 'actual';
-  const name = (p: ViewportPreset) => t(`panel.viewport.${p}`);
-  const title = active ? t('panel.viewport.active', { name: name(preset), width: bands[preset].width }) : t('panel.viewport.title');
-  return (
-    <div className="vp" ref={box}>
-      <button className={`icon-btn vp-btn${active ? ' on' : ''}`} title={title} aria-label={title} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <Icon.viewport />
-        {active && (
-          <span className="vp-label">
-            {name(preset)} {bands[preset].width}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="vp-menu" role="menu">
-          {PRESETS.map((p) => (
-            <button
-              key={p}
-              role="menuitemradio"
-              aria-checked={p === preset}
-              className={p === preset ? 'on' : ''}
-              onClick={() => {
-                setOpen(false);
-                if (p !== preset) send({ t: 'setViewport', preset: p });
-              }}
-            >
-              <span>{name(p)}</span>
-              {p !== 'actual' && (
-                <small>
-                  {bands[p].width}
-                  {bands[p].prefix && ` · ${bands[p].prefix}:`}
-                </small>
-              )}
-            </button>
-          ))}
-          <p className="vp-note">{t('panel.viewport.note')}</p>
         </div>
       )}
     </div>

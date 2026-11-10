@@ -1,4 +1,4 @@
-import { changeName, getLocale, groupLabel, sameValue, setLocale, t, viewportBands, type AssetView, type ChangeView, type ElementSnapshot, type OrderView, type PanelState, type PanelToExt, type PropsView, type Scales, type ScaleStep, type Target } from '@css-tuner/protocol';
+import { changeName, getLocale, groupLabel, sameValue, setLocale, t, type AssetView, type ChangeView, type ElementSnapshot, type OrderView, type PanelState, type PanelToExt, type PropsView, type Scales, type ScaleStep, type Target } from '@css-tuner/protocol';
 import type { Host } from './host';
 
 /** 浏览器里调试面板用的假宿主：行为尽量贴近扩展，便于不开 Cursor 也能看交互 */
@@ -70,7 +70,6 @@ export function mockScales(): Scales {
     opacity: Array.from({ length: 21 }, (_, i) => ({ label: String(i * 5), value: String(i / 20), token: String(i * 5) })),
     zIndex: [0, 10, 20, 30, 40, 50].map((n) => ({ label: String(n), value: String(n), px: n, token: String(n) })),
     borderWidth: [['0', 0], ['DEFAULT', 1], ['2', 2], ['4', 4], ['8', 8]].map(([k, v]) => ({ label: String(k), value: `${v}px`, px: +v, token: k === 'DEFAULT' ? '' : String(k) })),
-    breakpoints: [['sm', 640], ['md', 768], ['lg', 1024], ['xl', 1280], ['2xl', 1536]].map(([name, px]) => ({ name: String(name), px: +px })),
   };
 }
 
@@ -343,7 +342,6 @@ export function createMockHost(): Host {
     page: { url: 'http://localhost:5173/', title: 'fixture · tw-react' },
     pickOn: false,
     measureOn: false,
-    viewport: { preset: 'actual', bands: viewportBands(mockScales().breakpoints, true) },
     scope: 'instance',
     selection: null,
     scales: mockScales(),
@@ -574,9 +572,6 @@ export function createMockHost(): Host {
       case 'measure':
         state.measureOn = m.on;
         if (m.on) state.pickOn = false;
-        break;
-      case 'setViewport':
-        state.viewport = { ...state.viewport, preset: m.preset };
         break;
       case 'pick':
         state.pickOn = m.on;

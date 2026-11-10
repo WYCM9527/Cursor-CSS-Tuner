@@ -144,10 +144,6 @@ describe('交给 Agent 的提示词', () => {
     const pad = rec(ownClass);
     const color = rec({ ...ownClass, id: 'b2', props: ['color'], propLabel: 'color', from: '#111', to: '#222', value: '#222' });
     expect(buildPrompt([pad, color], ctx)).toContain('the following 1 item:');
-    const phone = rec({ ...ownClass, id: 'c3', band: { name: 'mobile', min: 0, max: 768 } });
-    const p = buildPrompt([pad, phone], ctx);
-    expect(p).toContain('2. Element `h1.title`');
-    expect(p).toContain('   - Only when the page is narrower than 768px (phone); wider stays the same');
     const another = rec({ ...ownClass, id: 'd4', preview: { kind: 'inline', uid: 'u9', sourceKey: null } });
     expect(buildPrompt([pad, another], ctx)).toContain('the following 2 items:');
   });

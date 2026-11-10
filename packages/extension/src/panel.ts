@@ -21,14 +21,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     view.webview.html = this.html(view.webview, media);
     const attach = this.controller.attachPanel((msg) => void view.webview.postMessage(msg));
     const sub = view.webview.onDidReceiveMessage((msg: PanelToExt) => void this.controller.handle(msg));
-    // 视口：面板收起时页面暂时回到实际宽度
-    const shown = view.onDidChangeVisibility(() => this.controller.panelVisible(view.visible));
-    this.controller.panelVisible(view.visible);
     view.onDidDispose(() => {
       attach.dispose();
       sub.dispose();
-      shown.dispose();
-      this.controller.panelClosed();
       this.view = null;
     });
   }

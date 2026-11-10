@@ -1,5 +1,4 @@
 import type { ChangeKind, ChangeStatus, ChangeView, ElementSnapshot, PreviewTarget, SourceLoc, Target } from '@css-tuner/protocol';
-import type { RecordBand } from './band';
 import type { WriteSpec } from './planner';
 
 export interface ChangeRecord {
@@ -42,8 +41,6 @@ export interface ChangeRecord {
   removal?: { values: Record<string, string>; from?: Record<string, string>; classes?: string[] };
   /** 预览用的声明和 props → value 不一样时（没有填充色的渐变描边用两层背景预览） */
   decls?: Record<string, string>;
-  /** 视口选了一档时改的：只管这一档，页面宽度在这一档里才预览，应用后切到这一档核对 */
-  band?: RecordBand;
 }
 
 /**

@@ -302,13 +302,6 @@ export function namespaces(theme: Theme): { spaces: Map<string, Map<string | nul
     '--color',
     entries('colors').filter(([k]) => k !== 'inherit' && k !== 'current' && k !== ''),
   );
-  // screens 的值可以是 '768px'，也可以是 { min, max } 或 { raw }：只有下限的才是 md: 这种「从这个宽度起」的断点
-  const screens: Array<[string, string]> = [];
-  for (const [k, v] of Object.entries((theme.screens ?? {}) as Record<string, unknown>)) {
-    const min = typeof v === 'string' ? v : v && typeof v === 'object' && !Array.isArray(v) ? (v as { min?: unknown }).min : null;
-    if (typeof min === 'string') screens.push([k, min]);
-  }
-  put('--breakpoint', screens);
   return { spaces, base };
 }
 
