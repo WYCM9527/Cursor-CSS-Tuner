@@ -4,7 +4,7 @@
 
 [English](https://github.com/WYCM9527/Cursor-CSS-Tuner/blob/main/packages/extension/README.md) · 简体中文
 
-![选中卡片，拖动内边距和圆角，再把两条改动应用到源码](https://raw.githubusercontent.com/WYCM9527/Cursor-CSS-Tuner/main/docs/media/hero.zh-CN.gif)
+![选中卡片，拖动内边距和圆角，把两条改动交给 Agent，代码改好后标成已应用](https://raw.githubusercontent.com/WYCM9527/Cursor-CSS-Tuner/main/docs/media/hero.zh-CN.gif)
 
 它要解决的事只有一件：**在 Cursor 里调样式、改文字、调顺序、改属性、看效果，再把效果应用到代码里**。点“应用”时，扩展把改动整理成提示词，预填进新的 Agent 对话，由你按回车发送；扩展自己不改代码文件。Agent 改完、页面更新后，面板核对页面和预览是否一致。
 

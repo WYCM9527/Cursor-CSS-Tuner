@@ -4,7 +4,7 @@ Pick an element in Cursor's built-in browser, drag its values, edit its text, ch
 
 English · [简体中文](https://github.com/WYCM9527/Cursor-CSS-Tuner/blob/main/packages/extension/README.zh-CN.md)
 
-![Select a card, drag its padding and corner radius, then apply both changes to the source](https://raw.githubusercontent.com/WYCM9527/Cursor-CSS-Tuner/main/docs/media/hero.gif)
+![Select a card, drag its padding and corner radius, hand both changes to the Agent, and see them marked applied once the code is updated](https://raw.githubusercontent.com/WYCM9527/Cursor-CSS-Tuner/main/docs/media/hero.gif)
 
 It does one job: **adjust styles, text, order and props inside Cursor, see the result, and put it in your code**. When you click Apply, the extension drafts a prompt and prefills a new Agent chat; you review it and press Enter to send. The extension doesn't edit your files itself. Once the Agent has made the change and the page has updated, the panel checks the page against the preview.
 

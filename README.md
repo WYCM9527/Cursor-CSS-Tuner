@@ -2,7 +2,7 @@
 
 A Cursor extension: pick elements in the built-in browser, tune their CSS, edit their text and their components' props, and reorder them among their siblings with live preview, hand the changes to Cursor's Agent to put in your source code, see them checked on the page, and revert any single change.
 
-![Select a card, drag its padding and corner radius, then apply both changes to the source](docs/media/hero.gif)
+![Select a card, drag its padding and corner radius, hand both changes to the Agent, and see them marked applied once the code is updated](docs/media/hero.gif)
 
 User guide: [English](packages/extension/README.md) · [简体中文](packages/extension/README.zh-CN.md). The rest of this document covers development and is written in Chinese.
 
