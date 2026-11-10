@@ -14,6 +14,5 @@
   "config.remBase": "Root font size used to convert between rem and px.",
   "config.tailwind.scope": "In Tailwind projects, whether a change applies to just the element you picked or to every place that uses the same component by default.",
   "config.tailwind.scope.instance": "This one: change only the element you picked",
-  "config.tailwind.scope.source": "All: change the component itself, so every place that uses it changes",
-  "config.snap": "Snap numbers to the theme's values and CSS variables (hold Alt to use any value)."
+  "config.tailwind.scope.source": "All: change the component itself, so every place that uses it changes"
 }

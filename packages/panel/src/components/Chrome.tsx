@@ -39,11 +39,6 @@ export function Toolbar({ state, send }: { state: PanelState; send: Send }) {
           <IconToggle on={state.measureOn} title={state.measureOn ? t('panel.measure.on') : t('panel.measure.off')} onClick={() => send({ t: 'measure', on: !state.measureOn })}>
             <Icon.ruler />
           </IconToggle>
-          <IconToggle on={state.snap} title={state.snap ? t('panel.snap.on') : t('panel.snap.off')} onClick={() => send({ t: 'setSnap', on: !state.snap })}>
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.3">
-              <path d="M2 12h12M4 12V9M7 12V6M10 12V9M13 12V4" />
-            </svg>
-          </IconToggle>
         </div>
       )}
     </div>

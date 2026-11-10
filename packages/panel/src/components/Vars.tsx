@@ -9,7 +9,6 @@ import type { Edit } from './types';
 interface Props {
   sel: SelectionView;
   ctx: Ctx;
-  snap: boolean;
   colors: ScaleStep[] | null;
   open: boolean;
   onToggle: (id: string) => void;
@@ -18,7 +17,7 @@ interface Props {
 }
 
 /** 元素用到的 CSS 变量：改的是定义处，页面上用到它的地方一起变 */
-export function Vars({ sel, ctx, snap, colors, open, onToggle, edit, reset }: Props) {
+export function Vars({ sel, ctx, colors, open, onToggle, edit, reset }: Props) {
   const vars = sel.el.vars ?? [];
   if (!vars.length) return null;
   return (
@@ -29,7 +28,7 @@ export function Vars({ sel, ctx, snap, colors, open, onToggle, edit, reset }: Pr
             {v.name}
           </span>
           <div className="row-fields">
-            <VarField v={v} sel={sel} ctx={ctx} snap={snap} colors={colors} edit={(e) => edit([v.name], e)} reset={() => reset([v.name])} />
+            <VarField v={v} sel={sel} ctx={ctx} colors={colors} edit={(e) => edit([v.name], e)} reset={() => reset([v.name])} />
           </div>
         </div>
       ))}
@@ -37,8 +36,8 @@ export function Vars({ sel, ctx, snap, colors, open, onToggle, edit, reset }: Pr
   );
 }
 
-function VarField(props: { v: UsedVar; sel: SelectionView; ctx: Ctx; snap: boolean; colors: ScaleStep[] | null; edit: (e: Edit) => void; reset: () => void }) {
-  const { v, sel, ctx, snap, colors, edit } = props;
+function VarField(props: { v: UsedVar; sel: SelectionView; ctx: Ctx; colors: ScaleStep[] | null; edit: (e: Edit) => void; reset: () => void }) {
+  const { v, sel, ctx, colors, edit } = props;
   const value = currentValue(sel, v.name);
   const pending = isPending(sel, [v.name]);
   const target = sel.targets[v.name];
@@ -56,7 +55,6 @@ function VarField(props: { v: UsedVar; sel: SelectionView; ctx: Ctx; snap: boole
         values={[value]}
         steps={null}
         ctx={ctx}
-        snap={snap}
         pending={pending}
         target={target}
         unit={unitless ? '' : 'px'}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ScaleStep } from '@css-tuner/protocol';
 import { displayNumber, displayValue, shortFile, varName } from '../src/lib/format';
-import { nearest, ordered, scaleKeyOf, valuePx, walk, type Ctx } from '../src/lib/scale';
+import { nearest, scaleKeyOf, valuePx, type Ctx } from '../src/lib/scale';
 
 const ctx: Ctx = { fontPx: 20, rootPx: 16 };
 const spacing: ScaleStep[] = [
@@ -13,7 +13,7 @@ const spacing: ScaleStep[] = [
 ];
 
 describe('刻度', () => {
-  it('属性对应到吸附用的刻度', () => {
+  it('属性对应到主题里的刻度', () => {
     expect(scaleKeyOf('padding-left')).toBe('spacing');
     expect(scaleKeyOf('column-gap')).toBe('spacing');
     expect(scaleKeyOf('top')).toBe('spacing');
@@ -35,28 +35,11 @@ describe('刻度', () => {
     expect(valuePx('auto', ctx)).toBeNull();
   });
 
-  it('吸附到最近的刻度，±0.5px 内算正好落在刻度上', () => {
+  it('找最近的刻度，±0.5px 内算正好落在刻度上', () => {
     expect(nearest(spacing, 15.8, ctx)).toMatchObject({ index: 3, px: 16, exact: true });
     expect(nearest(spacing, 13, ctx)).toMatchObject({ index: 3, px: 16, exact: false });
     expect(nearest(spacing, 3, ctx)).toMatchObject({ index: 1, px: 4 });
     expect(nearest([], 3, ctx)).toBeNull();
-  });
-
-  it('拖拽序列按 px 排序，去掉换算不了的和重复的', () => {
-    const seq = ordered([spacing[4], { label: 'auto', value: 'auto' }, spacing[0], { label: '16px', value: '16px' }, spacing[3]], ctx);
-    expect(seq.map((s) => s.label)).toEqual(['0', '16px', '6']);
-  });
-
-  it('沿刻度走：在刻度上直接走一格，不在刻度上第一步先落到那个方向最近的刻度，两端停住', () => {
-    const seq = ordered(spacing, ctx);
-    expect(walk(seq, 8, 1)?.label).toBe('4');
-    expect(walk(seq, 8, -1)?.label).toBe('1');
-    expect(walk(seq, 10, 1)?.label).toBe('4');
-    expect(walk(seq, 10, -1)?.label).toBe('2');
-    expect(walk(seq, 24, 1)?.label).toBe('6');
-    expect(walk(seq, 0, -1)?.label).toBe('0');
-    expect(walk(seq, 100, -1)?.label).toBe('6');
-    expect(walk(seq, 8, 0)).toBeNull();
   });
 });
 

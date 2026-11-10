@@ -349,7 +349,6 @@ export function createMockHost(): Host {
     notice: null,
     defaultUrl: 'http://localhost:5173/',
     busy: false,
-    snap: true,
     locale: getLocale(),
     history: { undo: null, redo: null },
     fonts: null,
@@ -589,9 +588,6 @@ export function createMockHost(): Host {
       case 'setScope':
         state.scope = m.scope;
         if (state.selection) select(state.selection.el.uid);
-        break;
-      case 'setSnap':
-        state.snap = m.on;
         break;
       case 'setLocale':
         setLocale(m.locale);

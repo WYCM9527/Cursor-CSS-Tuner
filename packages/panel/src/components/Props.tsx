@@ -114,7 +114,6 @@ function control(view: PropView, ctx: Ctx, onEdit: OnEdit, corner: ReactNode): R
         values={[String(value)]}
         steps={null}
         ctx={ctx}
-        snap={false}
         pending={pending}
         target={target}
         unit=""

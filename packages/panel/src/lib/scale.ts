@@ -2,7 +2,7 @@ import { parseCssNumber, toPx, type ElementSnapshot, type Scales, type ScaleStep
 
 export type ScaleKey = Exclude<keyof Scales, 'mode' | 'rem' | 'gradientIn'>;
 
-/** 属性 → 吸附用的刻度 */
+/** 属性 → 主题里对应的刻度 */
 export function scaleKeyOf(prop: string): ScaleKey | null {
   if (/^(padding|margin)/.test(prop) || prop === 'row-gap' || prop === 'column-gap' || ['top', 'right', 'bottom', 'left'].includes(prop)) return 'spacing';
   if (/^(min-|max-)?(width|height)$/.test(prop)) return 'size';
@@ -60,38 +60,4 @@ export function nearest(steps: ScaleStep[], px: number, ctx: Ctx, prop?: string)
     if (!best || Math.abs(p - px) < Math.abs(best.px - px)) best = { step, index, px: p, exact: Math.abs(p - px) <= 0.5 };
   });
   return best;
-}
-
-/** 按 px 排序、去掉换算不了的刻度，拖拽和方向键在这个序列上移动 */
-export function ordered(steps: ScaleStep[], ctx: Ctx, prop?: string): Array<ScaleStep & { pxv: number }> {
-  const out: Array<ScaleStep & { pxv: number }> = [];
-  for (const s of steps) {
-    const p = stepPx(s, ctx, prop);
-    if (p !== null && Number.isFinite(p)) out.push({ ...s, pxv: p });
-  }
-  out.sort((a, b) => a.pxv - b.pxv);
-  const dedup: typeof out = [];
-  for (const s of out) {
-    const prev = dedup[dedup.length - 1];
-    if (prev && Math.abs(prev.pxv - s.pxv) < 0.01) continue;
-    dedup.push(s);
-  }
-  return dedup;
-}
-
-/** 从当前值出发沿刻度走 dir 步（当前值不在刻度上时，第一步先落到该方向上最近的刻度） */
-export function walk(seq: Array<ScaleStep & { pxv: number }>, px: number, dir: number): (ScaleStep & { pxv: number }) | null {
-  if (!seq.length || dir === 0) return null;
-  let i = seq.findIndex((s) => Math.abs(s.pxv - px) <= 0.5);
-  if (i < 0) {
-    if (dir > 0) {
-      i = seq.findIndex((s) => s.pxv > px) - 1;
-      if (i < -1) i = seq.length - 1;
-    } else {
-      const j = seq.findIndex((s) => s.pxv > px);
-      i = j < 0 ? seq.length : j;
-    }
-  }
-  const k = Math.max(0, Math.min(seq.length - 1, i + dir));
-  return seq[k];
 }

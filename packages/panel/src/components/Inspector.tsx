@@ -105,7 +105,6 @@ export function Inspector({ state, sel, prefs, setPrefs, edit, editText, editPro
       values={props.map((p) => currentValue(sel, p))}
       steps={steps(props[0])}
       ctx={ctx}
-      snap={state.snap}
       pending={isPending(sel, props)}
       target={sel.targets[props[0]]}
       declared={props.length === 1 && !(props[0] in sel.pending) ? declaredVar(sel.el, props[0]) : null}
@@ -339,7 +338,6 @@ export function Inspector({ state, sel, prefs, setPrefs, edit, editText, editPro
               values={[trackCount(currentValue(sel, 'grid-template-columns'))]}
               steps={null}
               ctx={ctx}
-              snap={state.snap}
               pending={isPending(sel, ['grid-template-columns'])}
               target={sel.targets['grid-template-columns']}
               unit=""
@@ -685,7 +683,7 @@ export function Inspector({ state, sel, prefs, setPrefs, edit, editText, editPro
         </Row>
       </Section>
 
-      <Vars sel={sel} ctx={ctx} snap={state.snap} colors={scales?.colors ?? null} open={open('vars')} onToggle={toggle} edit={edit} reset={(props) => send({ t: 'resetProps', props })} />
+      <Vars sel={sel} ctx={ctx} colors={scales?.colors ?? null} open={open('vars')} onToggle={toggle} edit={edit} reset={(props) => send({ t: 'resetProps', props })} />
       <Assets sel={sel} open={open('assets')} onToggle={toggle} send={send} />
     </div>
   );

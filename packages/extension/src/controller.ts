@@ -200,7 +200,6 @@ export class Controller implements vscode.Disposable {
       notice: null,
       defaultUrl: cfg.get<string>('defaultUrl', 'http://localhost:5173/'),
       busy: false,
-      snap: cfg.get<boolean>('snap', true),
       locale: getLocale(),
       history: { undo: null, redo: null },
       fonts: null,
@@ -220,7 +219,6 @@ export class Controller implements vscode.Disposable {
         if (!e.affectsConfiguration('cssTuner')) return;
         const c = vscode.workspace.getConfiguration('cssTuner');
         this.state.defaultUrl = c.get<string>('defaultUrl', this.state.defaultUrl);
-        this.state.snap = c.get<boolean>('snap', this.state.snap);
         if (e.affectsConfiguration('cssTuner.tailwind.scope')) this.state.scope = c.get<Scope>('tailwind.scope', this.state.scope);
         if (e.affectsConfiguration('cssTuner.language')) {
           setLocale(configuredLocale());
@@ -313,11 +311,6 @@ export class Controller implements vscode.Disposable {
         case 'setScope':
           this.state.scope = msg.scope;
           if (this.state.selection) this.state.selection = this.buildSelection(this.state.selection.el);
-          this.push();
-          return;
-        case 'setSnap':
-          this.state.snap = msg.on;
-          await vscode.workspace.getConfiguration('cssTuner').update('snap', msg.on, vscode.ConfigurationTarget.Global);
           this.push();
           return;
         case 'setLocale': {

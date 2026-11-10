@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { getLocale, localeFrom, setLocale, t, type MsgKey, type PanelState } from '@css-tuner/protocol';
 import { App } from './App';
-import { PX_PER_STEP } from './components/NumberField';
+import { PX_PER_UNIT } from './components/NumberField';
 import type { Host } from './host';
 import './styles.css';
 
@@ -12,8 +12,8 @@ import './styles.css';
  */
 interface FrameSpec {
   state: string;
-  /** 按住标题为 field 的数值字段，向右拖 steps 个刻度 */
-  drag?: { field: MsgKey; steps: number };
+  /** 按住标题为 field 的数值字段向右拖，值加 by 个步长 */
+  drag?: { field: MsgKey; by: number };
   /** 要报告位置的元素：CSS 选择器，或数值字段的标题；拖动时报告拖到的位置 */
   point?: string | { field: MsgKey };
 }
@@ -85,8 +85,10 @@ async function main() {
     const handle = fieldHandle(boxes[i], f.drag.field);
     if (!handle) throw new Error(`frame ${i}: no field ${f.drag.field}`);
     const from = center(handle);
-    const to = { x: from.x + PX_PER_STEP * f.drag.steps + 1, y: from.y };
+    const to = { x: from.x + PX_PER_UNIT * f.drag.by, y: from.y };
     handle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientX: from.x, clientY: from.y }));
+    // 先越过 3px 的起拖距离，拖一个步长也能动
+    handle.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: from.x + 3 * Math.sign(f.drag.by), clientY: from.y }));
     handle.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerId: 1, clientX: to.x, clientY: to.y }));
     drags.set(i, to);
   });

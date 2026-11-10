@@ -14,6 +14,5 @@
   "config.remBase": "rem 和 px 换算用的根字号。",
   "config.tailwind.scope": "Tailwind 项目里改样式时，默认只改选中的这一个，还是所有用到同一组件的地方一起改。",
   "config.tailwind.scope.instance": "只改这个：只改选中的这一个元素",
-  "config.tailwind.scope.source": "全部：改组件本身，所有用到它的地方一起变",
-  "config.snap": "数值自动对齐到主题里的值和 CSS 变量（按住 Alt 可以填任意值）。"
+  "config.tailwind.scope.source": "全部：改组件本身，所有用到它的地方一起变"
 }

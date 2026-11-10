@@ -111,11 +111,6 @@
           "enumDescriptions": ["%config.tailwind.scope.instance%", "%config.tailwind.scope.source%"],
           "default": "instance",
           "description": "%config.tailwind.scope%"
-        },
-        "cssTuner.snap": {
-          "type": "boolean",
-          "default": true,
-          "description": "%config.snap%"
         }
       }
     }
