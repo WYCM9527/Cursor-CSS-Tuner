@@ -6,6 +6,7 @@ export * from './assets';
 export * from './messages';
 export * from './selectors';
 export * from './cssprops';
+export * from './classes';
 export * from './compare';
 export * from './fonts';
 export * from './i18n';

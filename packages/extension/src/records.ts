@@ -1,5 +1,5 @@
-import type { ChangeKind, ChangeStatus, ChangeView, ElementSnapshot, PreviewTarget, SourceLoc, Target } from '@css-tuner/protocol';
-import type { WriteSpec } from './planner';
+import type { ChangeKind, ChangeStatus, ChangeView, ElementSnapshot, PeerBase, PreviewTarget, SourceLoc, Target } from '@css-tuner/protocol';
+import type { Plan, WriteSpec } from './planner';
 
 export interface ChangeRecord {
   id: string;
@@ -32,8 +32,13 @@ export interface ChangeRecord {
   snapshot?: { file: string; hash: string };
   /** 最近一次交给 Agent（应用或还原）的时间 */
   sentAt?: number;
-  /** 交给 Agent 时用的附加说明：换序后兄弟的新顺序和原来的顺序、props 所属组件和它的调用处、文字来源、只装在本机的字体 */
-  detail?: { order?: string[]; was?: string[]; component?: string; site?: string; origin?: string; font?: string };
+  /** 交给 Agent 时用的附加说明：换序后兄弟的新顺序和原来的顺序、props 所属组件和它的调用处、文字来源、只装在本机的字体、只改一部分同伴 */
+  detail?: { order?: string[]; was?: string[]; component?: string; site?: string; origin?: string; font?: string; link?: RecordLink };
+  /**
+   * 第一次交给 Agent 时同伴的情况：改完后核对该一起变的都变了、别的没被带着变。
+   * 没有它（只有一个元素、预览不在页面上、各元素的值没法比）就只核对选中的那个元素
+   */
+  check?: PeerBase;
   /**
    * 删属性：每个属性删掉之后页面上的值（面板显示、应用后核对）、删之前的写法（撤掉删除再改时当原值显示；
    * 删除预览开着时元素快照里已经读不到），Tailwind 还有要去掉的类（各属性当前生效的类名）
@@ -41,6 +46,43 @@ export interface ChangeRecord {
   removal?: { values: Record<string, string>; from?: Record<string, string>; classes?: string[] };
   /** 预览用的声明和 props → value 不一样时（没有填充色的渐变描边用两层背景预览） */
   decls?: Record<string, string>;
+}
+
+/**
+ * 这条改动只改一部分同伴：这处代码渲染出 total 个元素（rule 为真时是规则命中 total 个），只改其中 view.affects 个。
+ * 哪几个：没有 segment 时是写法相同的（现在的值由同一处声明决定）；有 segment 时是类名里用到这一段字符串的，
+ * byValue 为真时还要写法相同。inherited：原值是继承来的
+ */
+export interface RecordLink {
+  total: number;
+  inherited?: boolean;
+  segment?: string;
+  byValue?: boolean;
+  rule?: boolean;
+}
+
+/** 样式改动的标识是「代码位置[~这一组的记号]|属性」（见 planner 的 targetKey）：取出代码位置。记号里没有 |，代码位置里的 ~ 后面一定还有 | */
+export function siteOfKey(key: string): string {
+  const target = key.slice(0, Math.max(0, key.lastIndexOf('|')));
+  const at = target.lastIndexOf('~');
+  return at >= 0 && !target.slice(at).includes('|') ? target.slice(0, at) : target;
+}
+
+/**
+ * 记进改动的代码位置：只带上一部分同伴的预览，影响几个按预览实际作用到的个数（count）算，规划时只是估计；
+ * 比这处代码渲染出的元素（或者规则命中的元素）少时记下总数和是哪一部分，交给 Agent 时要说清只改其中几个
+ */
+export function linkedView(plan: Plan, count: number): { view: Target; link?: RecordLink } {
+  const { view, link, preview } = plan;
+  if (!link || preview.kind !== 'inline' || !(preview.linked || preview.segs) || count < 1) return { view };
+  if (count >= link.total) return { view: { ...view, affects: count } };
+  const part: RecordLink = {
+    total: link.total,
+    ...(link.inherited ? { inherited: true } : {}),
+    ...(link.segment ? { segment: link.segment, byValue: link.byValue } : {}),
+    ...(link.rule ? { rule: true } : {}),
+  };
+  return { view: { ...view, affects: count }, link: part };
 }
 
 /**

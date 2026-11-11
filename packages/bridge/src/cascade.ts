@@ -1,5 +1,5 @@
 import { aliasesOf, shorthandsOf } from '@css-tuner/protocol';
-import { compareSpec, resolveNested, specificity, splitTopLevel, type Spec } from './specificity';
+import { compareSpec, resolveNested, specificityOf, splitTopLevel, subjectOf, type Spec } from './specificity';
 
 export { aliasesOf };
 
@@ -20,11 +20,21 @@ export interface FlatRule {
   ordinal: number;
   active: boolean;
   names?: Map<string, number>;
+  /** 拿去试元素的分支（不含交互态的和只匹配伪元素的），第一次用到时算 */
+  tests?: string[];
+}
+
+interface RuleLookup {
+  byClass: Map<string, FlatRule[]>;
+  byTag: Map<string, FlatRule[]>;
+  loose: FlatRule[];
 }
 
 export interface RuleIndex {
   rules: FlatRule[];
   layerOrder: Map<string, number>;
+  /** 按类名查规则用，第一次用到时建 */
+  lookup?: RuleLookup;
 }
 
 interface Ctx {
@@ -171,20 +181,94 @@ export interface Matched {
 const INTERACTIVE = /:(hover|active|focus|focus-visible|focus-within)(?![\w-])/;
 
 export function matchRules(el: Element, idx: RuleIndex): Matched[] {
-  const out: Matched[] = [];
+  return matchAmong(el, idx.rules);
+}
+
+/** 只匹配伪元素的分支（*, ::before, ::placeholder 里的后两段）哪个元素都命中不了，不用试 */
+function testsOf(fr: FlatRule): string[] {
+  return (fr.tests ??= fr.branches.filter((b) => !INTERACTIVE.test(b) && !subjectOf(b).never));
+}
+
+/** 规则按「最后一段选择器写着的类名、标签名」分好组：元素没有那个类、不是那个标签的规则不用试；loose 是哪个元素都得试的 */
+function lookupOf(idx: RuleIndex): RuleLookup {
+  if (idx.lookup) return idx.lookup;
+  const byClass = new Map<string, FlatRule[]>();
+  const byTag = new Map<string, FlatRule[]>();
+  const loose: FlatRule[] = [];
+  // 怪异模式下类名不分大小写，按类名查会漏掉
+  const exact = document.compatMode !== 'BackCompat';
+  const put = (map: Map<string, FlatRule[]>, key: string, fr: FlatRule) => {
+    const list = map.get(key);
+    if (!list) map.set(key, [fr]);
+    else if (list[list.length - 1] !== fr) list.push(fr);
+  };
   for (const fr of idx.rules) {
     if (!fr.active) continue;
+    const subjects = testsOf(fr).map(subjectOf);
+    if (!subjects.length) continue;
+    if (!exact || subjects.some((s) => s.cls === null && s.tag === null)) {
+      loose.push(fr);
+      continue;
+    }
+    for (const s of subjects) {
+      if (s.cls !== null) put(byClass, s.cls, fr);
+      else put(byTag, s.tag!, fr);
+    }
+  }
+  return (idx.lookup = { byClass, byTag, loose });
+}
+
+/** 元素可能命中的规则：哪个元素都得试的，加上它的标签名和类名带出来的；没有带出来的就是 loose 本身（不要改它） */
+function candidatesFor(el: Element, idx: RuleIndex): FlatRule[] {
+  const { byClass, byTag, loose } = lookupOf(idx);
+  let rules: FlatRule[] | null = null;
+  const add = (list: FlatRule[] | undefined) => {
+    if (!list) return;
+    rules ??= loose.slice();
+    for (const fr of list) rules.push(fr);
+  };
+  // 标签名在 HTML 里不分大小写，SVG 的分（linearGradient）：都按小写查，多带出来的由 matches 筛掉
+  add(byTag.get(el.localName.toLowerCase()));
+  for (const cls of el.classList) add(byClass.get(cls));
+  if (!rules) return loose;
+  // 按样式表里的顺序排回去；选择器列表里有两段都对得上这个元素的规则会出现两次，只留一个
+  (rules as FlatRule[]).sort((a, b) => a.order - b.order);
+  return (rules as FlatRule[]).filter((fr, i, all) => i === 0 || fr !== all[i - 1]);
+}
+
+/** 试这个元素要过几条规则（估算一批差不多的元素要花多少时间用） */
+export function candidateCount(el: Element, idx: RuleIndex): number {
+  return candidatesFor(el, idx).length;
+}
+
+/**
+ * 结果和 matchRules 一样，只试元素的标签名、类名可能命中的规则：一次要算很多元素（同源元素）时用。
+ * spend 在动手之前拿到要试几回选择器（一条规则的选择器列表里有几段就试几回），调用的人据此记账，不想算了就在里面抛出
+ */
+export function matchRulesQuick(el: Element, idx: RuleIndex, spend?: (tests: number) => void): Matched[] {
+  const rules = candidatesFor(el, idx);
+  if (spend) {
+    let tests = 0;
+    for (const fr of rules) if (fr.active) tests += testsOf(fr).length;
+    spend(tests);
+  }
+  return matchAmong(el, rules);
+}
+
+function matchAmong(el: Element, rules: FlatRule[]): Matched[] {
+  const out: Matched[] = [];
+  for (const fr of rules) {
+    if (!fr.active) continue;
     let best: Spec | null = null;
-    for (const branch of fr.branches) {
-      if (INTERACTIVE.test(branch)) continue;
+    for (const sel of testsOf(fr)) {
       let ok = false;
       try {
-        ok = el.matches(branch);
+        ok = el.matches(sel);
       } catch {
         ok = false;
       }
       if (ok) {
-        const s = specificity(branch);
+        const s = specificityOf(sel);
         if (!best || compareSpec(s, best) > 0) best = s;
       }
     }
@@ -259,8 +343,11 @@ export interface Winner {
   inline: boolean;
 }
 
-/** 按层叠顺序挑出某属性的胜出声明：重要性 → 内联 → 层 → 优先级 → 出现顺序 */
-export function pickWinner(el: Element, matched: Matched[], prop: string, reader: Reader = plainReader): Winner | null {
+/**
+ * 按层叠顺序挑出某属性的胜出声明：重要性 → 内联 → 层 → 优先级 → 出现顺序。
+ * inline 为 false 时不看元素的内联样式，只在命中的规则里挑（命中同样规则的元素结果一样，可以共用）
+ */
+export function pickWinner(el: Element, matched: Matched[], prop: string, reader: Reader = plainReader, inline = true): Winner | null {
   let best: { w: Winner; key: number[] } | null = null;
   const consider = (w: Winner, key: number[]) => {
     if (!best) {
@@ -283,7 +370,7 @@ export function pickWinner(el: Element, matched: Matched[], prop: string, reader
     consider({ decl: d, fr: m.fr, inline: false }, [d.important ? 1 : 0, 0, rank, m.spec[0], m.spec[1], m.spec[2], m.fr.order, d.index]);
   }
 
-  const inlineStyle = (el as HTMLElement).style;
+  const inlineStyle = inline ? (el as HTMLElement).style : null;
   if (inlineStyle && inlineStyle.length) {
     const d = readDecl({ style: inlineStyle }, prop, reader);
     if (d && d.value !== '') consider({ decl: d, fr: null, inline: true }, [d.important ? 1 : 0, 1, 0, 0, 0, 0, Infinity, d.index]);

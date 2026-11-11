@@ -163,6 +163,27 @@ export function unescapeIdent(s: string): string {
   });
 }
 
+/** 下标（从小到大）写成区间：0,2-5,9。一批同伴里记下其中一部分用（见 PeerBase） */
+export function ranges(indexes: number[]): string {
+  const out: string[] = [];
+  for (let i = 0; i < indexes.length; i++) {
+    const from = indexes[i];
+    while (i + 1 < indexes.length && indexes[i + 1] === indexes[i] + 1) i++;
+    out.push(from === indexes[i] ? `${from}` : `${from}-${indexes[i]}`);
+  }
+  return out.join(',');
+}
+
+/** ranges 写出来的区间读回下标 */
+export function indexesIn(text: string): Set<number> {
+  const out = new Set<number>();
+  for (const part of text ? text.split(',') : []) {
+    const [from, to = from] = part.split('-').map(Number);
+    for (let i = from; i <= to; i++) out.add(i);
+  }
+  return out;
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }

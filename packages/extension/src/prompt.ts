@@ -1,6 +1,6 @@
 import { groupLabel, PROP_GROUPS, t } from '@css-tuner/protocol';
 import type { ProjectResolver } from './project';
-import type { ChangeRecord } from './records';
+import type { ChangeRecord, RecordLink } from './records';
 
 export interface HandoffContext {
   pageUrl: string;
@@ -80,14 +80,37 @@ function changeLines(rec: ChangeRecord, tw: boolean, back: boolean): string[] {
 }
 
 /**
- * 改动之外要交代的：改在哪段代码、定位时知道的线索、再发一次时上一次的结果。
+ * 同一处代码渲染出好几个元素（或者一条规则命中好几个）、这条改动只改其中一部分（类名写在条件分支里、值是从不同的外层继承来的）。
+ * 还原时不用说：照着之前改的改回去
+ */
+function partialOf(rec: ChangeRecord, back: boolean): RecordLink | undefined {
+  return !back && rec.kind === 'style' ? rec.detail?.link : undefined;
+}
+
+/** 只改哪几个：规则命中的元素里写法相同的；同源元素里类名用到同一段字符串的、写法相同的，或者两样都要 */
+function partialLine(rec: ChangeRecord, partial: RecordLink): string {
+  const n = rec.view.affects;
+  if (partial.rule) return t('handoff.partial.rule', { total: partial.total, n });
+  // 第几个是在全部同源元素里数的：改的是外层调用处时（只管其中一部分）对不上，不写
+  const index = partial.total === rec.element.sameSource ? t('handoff.partial.index', { i: rec.element.sourceIndex + 1 }) : '';
+  if (!partial.segment) return t('handoff.partial', { total: partial.total, n, index });
+  return t(partial.byValue ? 'handoff.partial.both' : 'handoff.partial.segment', { total: partial.total, n, index, segment: partial.segment });
+}
+
+/**
+ * 改动之外要交代的：改在哪段代码、只改同一处代码渲染出的哪几个、定位时知道的线索、再发一次时上一次的结果。
  * 没有源码位置的元素，线索只是「找不到位置」，不写；渐变描边的说明是写法上的要求，总要写
  */
-function contextLines(rec: ChangeRecord): string[] {
+function contextLines(rec: ChangeRecord, back: boolean): string[] {
   const lines: string[] = [];
   const rule = rec.kind === 'style' ? ruleText(rec) : null;
   if (rule) lines.push(t('handoff.rule', { rule }));
   else if (rec.view.kind !== 'agent' && rec.view.label && !atElement(rec)) lines.push(t('handoff.target', { label: rec.view.label }));
+  const partial = partialOf(rec, back);
+  if (partial) {
+    lines.push(partialLine(rec, partial));
+    if (partial.inherited) lines.push(t('handoff.partial.inherited'));
+  }
   if (rec.write.kind === 'agent' && (rec.element.source || rec.decls)) lines.push(t('handoff.why', { why: rec.write.reason }));
   if (rec.note && (rec.status === 'handoff' || rec.status === 'reverting')) lines.push(t('handoff.last', { note: rec.note }));
   return lines;
@@ -107,9 +130,9 @@ export function buildPrompt(recs: ChangeRecord[], ctx: HandoffContext, mode: Pro
       // 只有页面层级时，同名的兄弟元素靠文字区分
       text: !rec.element.source && rec.element.text ? t('handoff.elementText', { text: rec.element.text }) : '',
       loc: loc ? t('common.paren', { text: loc }) : '',
-      same: rec.view.affects > 1 ? t('handoff.sameSource', { n: rec.view.affects }) : '',
+      same: !partialOf(rec, back) && rec.view.affects > 1 ? t('handoff.sameSource', { n: rec.view.affects }) : '',
     };
-    const context = contextLines(rec);
+    const context = contextLines(rec, back);
     const key = [rec.preview.uid, head.label, head.text, head.loc, head.same, ...context].join('\n');
     const item = items.get(key) ?? { head, changes: [], context };
     item.changes.push(...changeLines(rec, ctx.tailwind, back));

@@ -49,6 +49,9 @@ import { History, pendingSet } from './history';
 import { Journal, type ChangeRecord } from './journal';
 import { MessageFiles } from './messages';
 import {
+  groupByTarget,
+  groupMark,
+  linkedPreview,
   oneLine,
   plan,
   planOrder,
@@ -57,8 +60,9 @@ import {
   planVar,
   propKey,
   scopeAll,
-  sourceKeyOf,
+  siteKey,
   tailwindEntry,
+  targetKey,
   textKey,
   type OrderContext,
   type OrderPlan,
@@ -71,7 +75,7 @@ import {
 } from './planner';
 import { ProjectResolver } from './project';
 import { buildPrompt, type PromptMode } from './prompt';
-import { recordElement, samePage } from './records';
+import { linkedView, recordElement, samePage } from './records';
 import { cssScales, measureSteps } from './scales';
 import { commandCheck, liveCheck, type CheckItem } from './selfcheck';
 import { BridgeServer } from './server';
@@ -104,16 +108,6 @@ function siteRoot(htmlFile: string): string {
     dir = up;
   }
   return best;
-}
-
-/** 同一处代码的标识：Tailwind 是 JSX 调用位置，CSS 是那条规则，找不到位置的是元素 */
-export function targetKey(p: Plan, el: ElementSnapshot): string {
-  const w = p.write;
-  if (w.kind === 'tailwind') return `tw|${w.file}|${w.line}|${w.column}`;
-  if (w.kind === 'css') return `css|${w.file}|${w.fullSelector}|${w.conditions.join('|')}|${w.ordinal}`;
-  if (w.kind === 'theme') return `theme|${w.file}|${w.name}`;
-  if (p.preview.kind === 'rule') return `agent|rule|${p.preview.rule.sheet.index}|${p.preview.rule.fullSelector}|${p.preview.rule.conditions.join('|')}|${p.preview.rule.ordinal}`;
-  return `agent|${sourceKeyOf(el) ?? el.uid}`;
 }
 
 /** 提示词里的一项兄弟：标签加文字开头，几项标签一样时也分得清 */
@@ -1026,9 +1020,11 @@ export class Controller implements vscode.Disposable {
     const pending: Record<string, string> = {};
     const removed = new Set<string>();
     for (const rec of [...this.journal.pending()].reverse()) {
+      // 一条改动里各属性跟着变的元素相同，这一组的记号是按排在最前面的属性记的
+      const mark = groupMark(this.plans.get(rec.props[0]));
       for (const prop of rec.props) {
         const p = this.plans.get(prop);
-        if (!p || !rec.key.startsWith(targetKey(p, el) + '|')) continue;
+        if (!p || !rec.key.startsWith(`${siteKey(p, el)}${mark}|`)) continue;
         pending[prop] = rec.removal?.values[prop] ?? rec.value;
         if (rec.removal) removed.add(prop);
         else removed.delete(prop);
@@ -1117,18 +1113,9 @@ export class Controller implements vscode.Disposable {
     }));
   }
 
-  /** 按代码位置分组：同一组的属性记成一条改动 */
-  private groupByTarget(el: ElementSnapshot, props: string[]): Map<string, { plan: Plan; props: string[] }> {
-    const groups = new Map<string, { plan: Plan; props: string[] }>();
-    for (const prop of props) {
-      const p = this.plans.get(prop);
-      if (!p) continue;
-      const k = targetKey(p, el);
-      const g = groups.get(k) ?? { plan: p, props: [] };
-      g.props.push(prop);
-      groups.set(k, g);
-    }
-    return groups;
+  /** 按代码位置分组：同一组的属性记成一条改动（见 planner 的 groupByTarget） */
+  private groupByTarget(el: ElementSnapshot, props: string[]): Array<{ tk: string; plan: Plan; props: string[] }> {
+    return groupByTarget((prop) => this.plans.get(prop), el, props);
   }
 
   private async doEdit(req: EditRequest) {
@@ -1139,9 +1126,9 @@ export class Controller implements vscode.Disposable {
     if (isGradient(req.value) && req.props.every((p) => /^border-(top|right|bottom|left)-color$/.test(p))) return this.doStrokeGradient(req);
     const el = sel.el;
     let undeleted = false;
-    for (const [tk, g] of this.groupByTarget(el, req.props)) {
+    for (const g of this.groupByTarget(el, req.props)) {
       const props = [...g.props].sort();
-      const key = `${tk}|${props.join(',')}`;
+      const key = `${g.tk}|${props.join(',')}`;
       const existing = this.journal.findPending(key);
       const previewId = this.previewIdFor(key, existing);
       const decls = { ...(await this.companions(g.plan.write, props, req.token ?? null)), ...Object.fromEntries(props.map((p) => [p, req.value])) };
@@ -1179,9 +1166,10 @@ export class Controller implements vscode.Disposable {
       const to = this.describeTo(g.plan, req);
       const from = was[props[0]] ?? this.describeFrom(el, props[0], g.plan);
       const expected = Object.fromEntries(props.filter((p) => res.computed[p] !== undefined).map((p) => [p, res.computed[p]]));
-      const { view, write } = g.plan;
+      const { write } = g.plan;
+      const { view, link } = linkedView(g.plan, res.count);
       const font = props.includes('font-family') && !req.token ? this.fonts.localOnly(req.value) : null;
-      const detail = font ? { font } : undefined;
+      const detail = font || link ? { ...(font ? { font } : {}), ...(link ? { link } : {}) } : undefined;
       if (existing) {
         const undo = existing.removal ? { from, removal: undefined } : {};
         this.journal.update(existing.id, { value: req.value, token: req.token ?? null, to, expected, view, write, decls: undefined, detail, ...undo });
@@ -1224,10 +1212,11 @@ export class Controller implements vscode.Disposable {
   private async doStrokeGradient(req: EditRequest) {
     const sel = this.state.selection;
     const session = this.session;
-    const plan = this.plans.get(req.props[0]);
+    const props = [...req.props].sort();
+    // 渐变描边四边是一个整体，不按各边跟着变的元素分开记；这一组的记号和别的改动一样取排在最前面的属性的
+    const plan = this.plans.get(props[0]);
     if (!sel || !session || !this.page || !plan) return;
     const el = sel.el;
-    const props = [...req.props].sort();
     const key = `${targetKey(plan, el)}|${props.join(',')}`;
     const existing = this.journal.findPending(key);
     const previewId = this.previewIdFor(key, existing);
@@ -1240,12 +1229,23 @@ export class Controller implements vscode.Disposable {
       'background-origin': STROKE_ORIGIN,
       ...Object.fromEntries(props.map((p) => [p, 'transparent'])),
     };
-    await session.call('preview', { id: previewId, target: plan.preview, decls });
+    const target = linkedPreview(plan.preview, props);
+    const res = await session.call('preview', { id: previewId, target, decls });
     const live = this.selectionOf(el);
     if (live) for (const p of props) live.pending[p] = req.value;
     if (req.phase === 'commit') {
       const reason = t('ext.plan.strokeGradient');
-      const fields = { value: req.value, token: null, to: req.value, expected: {}, view: { ...plan.view, kind: 'agent' as const, reason }, write: { kind: 'agent' as const, reason }, decls };
+      const { view, link } = linkedView({ ...plan, preview: target }, res.count);
+      const fields = {
+        value: req.value,
+        token: null,
+        to: req.value,
+        expected: {},
+        view: { ...view, kind: 'agent' as const, reason },
+        write: { kind: 'agent' as const, reason },
+        decls,
+        detail: link ? { link } : undefined,
+      };
       if (existing) this.journal.update(existing.id, { ...fields, ...(existing.removal ? { from: this.describeFrom(el, props[0], plan), removal: undefined } : {}) });
       else {
         this.journal.add({
@@ -1257,7 +1257,7 @@ export class Controller implements vscode.Disposable {
           propLabel: groupLabel(props),
           from: this.describeFrom(el, props[0], plan),
           original: Object.fromEntries(props.map((p) => [p, el.computed[p] ?? ''])),
-          preview: plan.preview,
+          preview: target,
           previewId,
           ...fields,
         });
@@ -1287,7 +1287,7 @@ export class Controller implements vscode.Disposable {
       return w?.kind === 'tailwind' ? w.utility : null;
     };
     const groups: Array<{ key: string; plan: Plan; props: string[]; classes?: string[] }> = [];
-    for (const [tk, g] of this.groupByTarget(el, declared)) {
+    for (const g of this.groupByTarget(el, declared)) {
       const props = [...g.props].sort();
       const w = g.plan.write;
       const classes = w.kind === 'tailwind' ? [...new Set(props.map(utility).filter((u): u is string => !!u))] : undefined;
@@ -1295,7 +1295,7 @@ export class Controller implements vscode.Disposable {
         this.notify('warn', t('ext.remove.override'));
         continue;
       }
-      groups.push({ key: `${tk}|${props.join(',')}`, plan: g.plan, props, ...(classes ? { classes } : {}) });
+      groups.push({ key: `${g.tk}|${props.join(',')}`, plan: g.plan, props, ...(classes ? { classes } : {}) });
     }
     const props = groups.flatMap((g) => g.props);
     if (!props.length) return;
@@ -1312,9 +1312,10 @@ export class Controller implements vscode.Disposable {
       const values = Object.fromEntries(gp.map((p) => [p, fallback[p] ?? '']));
       const from = Object.fromEntries(gp.map((p) => [p, was[p] ?? this.describeFrom(el, p, g)]));
       const removal = { values, from, ...(classes ? { classes } : {}) };
-      const { view, write } = g;
-      await session.call('preview', { id: previewId, target: g.preview, decls: removalDecls(g.preview, values) });
-      const fields = { value: '', token: null, to: t('panel.change.removed'), expected: values, view, write, removal };
+      const { write } = g;
+      const res = await session.call('preview', { id: previewId, target: g.preview, decls: removalDecls(g.preview, values) });
+      const { view, link } = linkedView(g, res.count);
+      const fields = { value: '', token: null, to: t('panel.change.removed'), expected: values, view, write, removal, detail: link ? { link } : undefined };
       if (existing) this.journal.update(existing.id, fields);
       else {
         this.journal.add({

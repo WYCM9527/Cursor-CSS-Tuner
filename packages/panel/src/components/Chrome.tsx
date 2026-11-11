@@ -141,7 +141,7 @@ export function ElementHeader({ state, sel, send }: { state: PanelState; sel: Se
           </div>
         </div>
       ) : (
-        el.sameSource > 1 && <p className="el-note">{t('panel.sameSource', { n: el.sameSource })}</p>
+        el.sameSource > 1 && <p className="el-note">{t(el.links && Object.keys(el.links).length ? 'panel.sameSource.some' : 'panel.sameSource', { n: el.sameSource })}</p>
       )}
     </div>
   );

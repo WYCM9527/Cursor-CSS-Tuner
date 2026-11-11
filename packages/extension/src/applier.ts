@@ -6,6 +6,7 @@ import { t } from '@css-tuner/protocol';
 import type { Controller } from './controller';
 import type { ChangeRecord } from './journal';
 import { prefill } from './handoff';
+import { siteOfKey } from './records';
 
 export const SCHEME = 'css-tuner';
 
@@ -15,6 +16,8 @@ const AFTER_CHANGE = [300, 1000, 2500, 6000];
 const AFTER_HELLO = [500, 2500];
 /** 没看到文件变化时也隔一会儿核对一次：Agent 改的文件可能在工作区外，或者被监听漏掉 */
 const POLL_MS = 4000;
+/** 选中的元素对上了、同伴没对上，过这么久还是这样才提醒 */
+const PEERS_OFF_MS = 5000;
 /** 构建产物和依赖的变化不算 Agent 改了代码 */
 const IGNORED = /[\\/](node_modules|\.git|dist|\.next|\.nuxt|\.svelte-kit|\.output|\.turbo|\.cache|coverage)[\\/]/;
 
@@ -98,6 +101,8 @@ export class Applier implements vscode.Disposable {
   private running: Promise<void> | null = null;
   /** 核对途中又要核对一轮：记下这一轮要不要切到别的档 */
   private queued: boolean | null = null;
+  /** 选中的元素对上了、同伴没对上的改动：第一次看到是什么时候 */
+  private readonly offSince = new Map<string, number>();
 
   constructor(
     private readonly c: Controller,
@@ -122,7 +127,9 @@ export class Applier implements vscode.Disposable {
     const sentAt = Date.now();
     for (const rec of recs) {
       const snapshot = rec.snapshot ?? (await this.snapshot(rec));
-      c.journal.update(rec.id, { status: 'handoff', sentAt, note: undefined, ...(snapshot ? { snapshot } : {}) });
+      // 同伴的情况只在第一次交出去时记：再发一次时代码可能已经改了一半
+      const check = rec.status === 'pending' ? await this.peerBase(rec) : rec.check;
+      c.journal.update(rec.id, { status: 'handoff', sentAt, note: undefined, check, ...(snapshot ? { snapshot } : {}) });
     }
     c.log(t('apply.sentLog', { n: recs.length }));
     if (how) c.notify('info', t(how === 'clipboard' ? 'ext.apply.clipboard' : 'ext.apply.prefilled', { n: recs.length }));
@@ -167,6 +174,13 @@ export class Applier implements vscode.Disposable {
     if (!file || text === null) return undefined;
     await this.snapshots.save(rec.id, text);
     return { file, hash: hash(text) };
+  }
+
+  /** 样式改动的预览挂在好几个元素上时，记下这些同伴现在的情况：改完后核对该一起变的都变了、别的没被带着变 */
+  private async peerBase(rec: ChangeRecord): Promise<ChangeRecord['check']> {
+    if (rec.kind !== 'style' || rec.preview.kind !== 'inline' || !rec.expected || !Object.keys(rec.expected).length) return undefined;
+    const base = await this.c.session?.call('peerBase', { id: rec.previewId, target: rec.preview, expected: rec.expected }, 8000).catch(() => null);
+    return base ?? undefined;
   }
 
   /** 有在等 Agent 的改动时盯着工作区里的文件变化、定时核对，都等完了就停 */
@@ -270,13 +284,16 @@ export class Applier implements vscode.Disposable {
           target: rec.preview,
           expected,
           source: src ? { path: src.path, line: src.line, column: src.column, index: rec.element.sourceIndex } : undefined,
+          ...(!back && rec.check ? { peers: rec.check } : {}),
         },
         8000,
       )
       .catch(() => null);
     // 核对途中被放弃、重新发过
     if (!r || c.journal.get(rec.id)?.status !== rec.status) return false;
-    if (r.ok) {
+    const off = r.ok && r.peers && (r.peers.under || r.peers.over) ? r.peers : null;
+    if (r.ok && !off) {
+      this.offSince.delete(rec.id);
       finish();
       return true;
     }
@@ -285,6 +302,19 @@ export class Applier implements vscode.Disposable {
       const above = c.journal.previewing().filter((x) => x.key === rec.key && x.createdAt > rec.createdAt);
       for (const x of [rec, ...above.reverse()]) await c.showPreview(x);
     }
+    if (off) {
+      // 选中的元素对上了，同伴没对上。可能只是还没变完（过渡动画、热更新分几批到），一直对不上才提醒；预览留着，可以再发一次
+      const since = this.offSince.get(rec.id) ?? Date.now();
+      this.offSince.set(rec.id, since);
+      if (settled || Date.now() - since >= PEERS_OFF_MS) {
+        const note = off.under
+          ? t('apply.partial.under', { want: off.members, got: off.members - off.under })
+          : t('apply.partial.over', { want: off.members, got: off.members + off.over });
+        if (rec.note !== note) c.journal.update(rec.id, { note });
+      }
+      return false;
+    }
+    this.offSince.delete(rec.id);
     const actual = shortValues(r.actual);
     if (settled && touched && actual) c.journal.update(rec.id, { note: t('apply.still', { actual }) });
     return false;
@@ -295,11 +325,11 @@ export class Applier implements vscode.Disposable {
    * 还原粗细后页面上是这个样式的默认粗细，和记下的原值对不上，这几边的粗细不核对
    */
   private revertExpected(rec: ChangeRecord): Record<string, string> {
-    const target = (r: ChangeRecord) => r.key.slice(0, r.key.lastIndexOf('|'));
+    const site = siteOfKey(rec.key);
     const live = new Set(
       this.c.journal
         .all()
-        .filter((r) => r.id !== rec.id && target(r) === target(rec) && (r.status === 'applied' || r.status === 'reverting'))
+        .filter((r) => r.id !== rec.id && siteOfKey(r.key) === site && (r.status === 'applied' || r.status === 'reverting'))
         .flatMap((r) => r.props),
     );
     return Object.fromEntries(Object.entries(rec.original).filter(([p]) => !/^border-\w+-width$/.test(p) || !live.has(p.replace(/width$/, 'style'))));

@@ -80,6 +80,17 @@ export interface Crumb {
   text?: string;
 }
 
+/**
+ * 一个属性只和一部分同伴写法相同：n 是相同的个数（含自己）；by 是决定它的那处声明的标识，同一组里的元素算出来一样；
+ * set 相同的属性跟着变的是同一批元素（一次改几个属性时，set 相同的记成一条改动）；inherited 表示值是从祖先继承来的
+ */
+export interface PropLink {
+  n: number;
+  by: string;
+  set: number;
+  inherited?: boolean;
+}
+
 export interface ElementSnapshot {
   uid: string;
   tag: string;
@@ -99,6 +110,16 @@ export interface ElementSnapshot {
   callers: CallerLoc[];
   /** 同源元素里带着这个类名的个数（改变体字符串时据此估算影响范围） */
   classCounts: Record<string, number>;
+  /**
+   * 只和一部分同源元素「写法相同」的属性：值由同一处声明决定（同一条规则、值相同的内联样式、同一处继承来的声明，或者都没设置）的才一起变。
+   * 没列出的属性是所有同源元素都相同；整个字段缺省表示没算（只有一个元素、同源元素多到算不起），照旧全部一起变
+   */
+  links?: Record<string, PropLink>;
+  /**
+   * 同 links，但同伴是 rules 里第 i 条规则命中的元素（键是 rules 的下标）：往这条规则里加声明时，只该变其中写法相同的。
+   * 只算可能拿来加声明的规则；都相同的规则不列
+   */
+  ruleLinks?: Record<number, Record<string, PropLink>>;
   /** 含 vars 里各变量：计算值和定义它的声明，键是变量名 */
   computed: Record<string, string>;
   winners: Record<string, DeclWinner>;
@@ -289,9 +310,13 @@ export type BridgeEvent =
 export type PreviewTarget =
   /**
    * depth：要改的代码在第几层调用处，预览只作用于调用链到这一层也相同的同源元素；
-   * withClass：要改的代码是变体字符串，预览只作用于带着这个类名的同源元素
+   * withClass：要改的代码是变体字符串，预览只作用于带着这个类名的同源元素；
+   * linked：预览只作用于这些属性和 uid 元素写法相同的同伴（见 ElementSnapshot.links）；
+   * segs / seg：要改的类名在好几段类名字符串里都写着（条件分支、几个变体），segs 是这几段各自的类名，
+   * 预览只作用于和 uid 元素一样用第 seg 段的同伴（见 activeSegment）；
+   * among：同伴不是同源元素，是这个选择器命中的元素（往 CSS 规则里加声明、只改其中一部分时）
    */
-  | { kind: 'inline'; uid: string; sourceKey: string | null; depth?: number; withClass?: string }
+  | { kind: 'inline'; uid: string; sourceKey: string | null; depth?: number; withClass?: string; linked?: string[]; segs?: string[][]; seg?: number; among?: string }
   | { kind: 'rule'; rule: RuleRef; uid: string }
   /** 元素第 segment 段直接子文本；sourceKey、depth 的含义同 inline，同源实例一起改；纯 HTML 页面带 htmlPath，核对时重新取页面 HTML */
   | { kind: 'text'; uid: string; sourceKey: string | null; segment: number; depth?: number; htmlPath?: number[] }
@@ -320,6 +345,16 @@ export interface SelectQuery {
 export interface MeasureStep {
   px: number;
   label: string;
+}
+
+/**
+ * 一条样式改动交给 Agent 之前，它的同伴（同源元素，或者规则命中的元素，按页面顺序）的情况：一共 total 个；
+ * members 是预览挂着的（该一起变的）那些的下标，same 是其余里源码给的值本来就等于期望值的。下标写成区间：`0,2-5,9`
+ */
+export interface PeerBase {
+  total: number;
+  members: string;
+  same: string;
 }
 
 export interface BridgeMethods {
@@ -351,10 +386,19 @@ export interface BridgeMethods {
      * expected 的键随目标类型：样式是 CSS 属性名，text 是 "text"，order 是 "order"（兄弟的 sig 按期望的顺序排，一行一项），props 是属性名（值为 JSON）。
      * source：热更新后元素可能被重建，按源码位置重新找回（不能用当前选中的元素）
      */
-    p: { id: string; target: PreviewTarget; expected: Record<string, string>; source?: { path: string; line: number; column: number; index: number } };
-    /** attached：预览还作用在页面上；found：页面上找得到这个元素 */
-    r: { ok: boolean; actual: Record<string, string>; attached: boolean; found: boolean };
+    p: { id: string; target: PreviewTarget; expected: Record<string, string>; source?: { path: string; line: number; column: number; index: number }; peers?: PeerBase };
+    /**
+     * attached：预览还作用在页面上；found：页面上找得到这个元素；
+     * peers：给了 peers、选中的元素又对上了的时候，同伴的情况（同伴的个数和记下时不一样就没有）：
+     * members 是该一起变的个数，under 是其中还没变成期望值的，over 是不该变、却新变成期望值的
+     */
+    r: { ok: boolean; actual: Record<string, string>; attached: boolean; found: boolean; peers?: { members: number; under: number; over: number } };
   };
+  /**
+   * 交给 Agent 之前记下同伴的情况，改完后核对「该一起变的都变了、别的没被带着变」。
+   * 预览不在页面上、只有一个同伴、各元素预览出来的值不一样（百分比、em，没法拿期望值去比）时为 null，改完只核对选中的元素
+   */
+  peerBase: { p: { id: string; target: PreviewTarget; expected: Record<string, string> }; r: PeerBase | null };
   reloadSheets: { p: { hrefs?: string[] }; r: number };
   /** 选中元素连同子元素里看得见的图片、背景图、SVG 和视频（限时） */
   assets: { p: Record<string, never>; r: AssetList };

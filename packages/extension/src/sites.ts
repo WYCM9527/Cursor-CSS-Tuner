@@ -22,6 +22,8 @@ import {
 export interface SiteInfo {
   /** className 字面量里的类名 */
   tokens: string[];
+  /** 同 tokens，按写在哪段字符串里分开（三元的两个分支、clsx 的几个参数各是一段），顺序同源码 */
+  segments: string[][];
   hasClassName: boolean;
   /** 经 cn / twMerge / tv 合并，调用处传进来的类能覆盖组件自己的 */
   merges: boolean;
@@ -91,7 +93,14 @@ export class ClassSiteReader {
       t =
         'error' in site
           ? null
-          : { tokens: site.tokens.map((x) => x.text), hasClassName: site.hasClassName, merges: site.merges, passesClassName: site.passesClassName, recipe: site.recipe };
+          : {
+              tokens: site.tokens.map((x) => x.text),
+              segments: site.segments.map((s) => site.tokens.filter((x) => x.seg === s).map((x) => x.text)),
+              hasClassName: site.hasClassName,
+              merges: site.merges,
+              passesClassName: site.passesClassName,
+              recipe: site.recipe,
+            };
       f.sites.set(key, t);
     }
     return t;

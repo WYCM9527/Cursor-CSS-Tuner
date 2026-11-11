@@ -1,12 +1,15 @@
-import type { PreviewTarget, PropValue, RuleRef } from '@css-tuner/protocol';
+import { activeSegment, type PreviewTarget, type PropValue, type RuleRef } from '@css-tuner/protocol';
 import { collectRules, type Reader } from './cascade';
+import { linkedTo, linkScope } from './links';
 import { movableKids, orderDecls } from './order';
 import { clearAllProps, clearProp, hasPropPreview, previewProp } from './props';
 import { sameSourceElements } from './source';
+import { staticSelector } from './specificity';
 import { clearAllTexts, clearTextPreview, hasTextPreview, previewText } from './text';
-import { elOf, isOwnSheet, sheetDevId, uidOf } from './util';
+import { elOf, isOwnNode, isOwnSheet, sheetDevId, uidOf } from './util';
 
 type Holder = { kind: 'inline'; el: HTMLElement } | { kind: 'rule'; style: CSSStyleDeclaration };
+type InlineTarget = Extract<PreviewTarget, { kind: 'inline' }>;
 
 interface Saved {
   holder: Holder;
@@ -29,6 +32,8 @@ interface Entry {
 
 const entries = new Map<string, Entry>();
 const saved = new Map<HTMLElement | CSSStyleDeclaration, Saved>();
+/** 按 style 对象查 saved：算同源元素的写法时一次要读很多元素的原值，不能每次把 saved 扫一遍 */
+const savedByStyle = new Map<CSSStyleDeclaration, Saved>();
 const probeHost = () => document.createElement('div');
 
 function keyOf(h: Holder) {
@@ -41,7 +46,16 @@ function save(h: Holder) {
   const original = h.kind === 'inline' ? h.el.getAttribute('style') : h.style.cssText;
   const probe = probeHost().style;
   probe.cssText = original ?? '';
-  saved.set(k, { holder: h, original, probe });
+  const s: Saved = { holder: h, original, probe };
+  saved.set(k, s);
+  savedByStyle.set(styleOf(h), s);
+}
+
+function forget(k: HTMLElement | CSSStyleDeclaration) {
+  const s = saved.get(k);
+  if (!s) return;
+  saved.delete(k);
+  savedByStyle.delete(styleOf(s.holder));
 }
 
 function styleOf(h: Holder): CSSStyleDeclaration {
@@ -60,8 +74,11 @@ function restore(k: HTMLElement | CSSStyleDeclaration) {
   const s = saved.get(k);
   if (!s) return;
   if (s.holder.kind === 'inline') {
-    if (s.original == null) s.holder.el.removeAttribute('style');
-    else s.holder.el.setAttribute('style', s.original);
+    if (s.original == null) {
+      // 经 el.style 写过、又没读过 style 属性时，Chromium 删属性会留下一个空的 style=""：先读一下再删
+      void s.holder.el.getAttribute('style');
+      s.holder.el.removeAttribute('style');
+    } else s.holder.el.setAttribute('style', s.original);
   } else {
     s.holder.style.cssText = s.original ?? '';
   }
@@ -69,15 +86,19 @@ function restore(k: HTMLElement | CSSStyleDeclaration) {
 
 /** 给层叠计算用：读预览之前的原值 */
 export const originalReader: Reader = (style, prop) => {
-  for (const s of saved.values()) {
-    if (styleOf(s.holder) !== style) continue;
-    let index = -1;
-    for (let i = 0; i < s.probe.length; i++) if (s.probe[i] === prop) index = i;
-    if (index < 0 && !s.probe.getPropertyValue(prop)) return 'absent';
-    return { value: s.probe.getPropertyValue(prop), priority: s.probe.getPropertyPriority(prop), ...(index >= 0 ? { index } : {}) };
-  }
-  return null;
+  const s = savedByStyle.get(style);
+  if (!s) return null;
+  let index = -1;
+  for (let i = 0; i < s.probe.length; i++) if (s.probe[i] === prop) index = i;
+  if (index < 0 && !s.probe.getPropertyValue(prop)) return 'absent';
+  return { value: s.probe.getPropertyValue(prop), priority: s.probe.getPropertyPriority(prop), ...(index >= 0 ? { index } : {}) };
 };
+
+/** 元素原来的 style 属性（预览改写之前的），没有时为 null */
+export function originalInline(el: Element): string | null {
+  const s = saved.get(el as HTMLElement);
+  return s ? s.original : el.getAttribute('style');
+}
 
 function walkPath(sheet: CSSStyleSheet, path: number[]): CSSRule | null {
   let list: CSSRuleList;
@@ -125,12 +146,39 @@ export function resolveRule(ref: RuleRef): CSSStyleDeclaration | null {
   return hit ? hit.style : null;
 }
 
+/**
+ * 一条内联预览的同伴，按页面顺序：同一段代码渲染出来的元素（sourceKey），或者同一条规则命中的元素（among）；
+ * 都不是就只有 el 自己
+ */
+export async function peersOf(target: InlineTarget, el: Element): Promise<Element[]> {
+  if (target.among) {
+    let hits: Element[] = [];
+    try {
+      hits = Array.from(document.querySelectorAll(staticSelector(target.among))).filter((e) => !isOwnNode(e));
+    } catch {
+      /* 选择器浏览器不认：只管选中的这个 */
+    }
+    return hits.includes(el) ? hits : [el];
+  }
+  if (!target.sourceKey) return [el];
+  const els = await sameSourceElements(el, target.depth ?? 0);
+  return target.withClass ? els.filter((e) => e === el || e.classList.contains(target.withClass!)) : els;
+}
+
+/** 同伴里跟着 el 一起变的：类名用的是同一段字符串的（segs），这几个属性写法相同的（linked） */
+function membersOf(target: InlineTarget, el: Element, peers: Element[]): Element[] {
+  let els = peers;
+  const { segs, seg } = target;
+  if (segs && seg !== undefined) els = els.filter((e) => e === el || activeSegment(segs, (c) => e.classList.contains(c)) === seg);
+  if (target.linked?.length && els.length > 1) els = linkedTo(el, els, target.linked, linkScope(collectRules(isOwnSheet), originalReader, originalInline));
+  return els;
+}
+
 async function holdersFor(target: PreviewTarget): Promise<Holder[]> {
   if (target.kind === 'inline') {
     const el = elOf(target.uid);
     if (!el) return [];
-    let els = target.sourceKey ? await sameSourceElements(el, target.depth ?? 0) : [el];
-    if (target.withClass) els = els.filter((e) => e === el || e.classList.contains(target.withClass!));
+    const els = membersOf(target, el, await peersOf(target, el));
     return els.filter((e): e is HTMLElement => e instanceof HTMLElement || e instanceof SVGElement).map((e) => ({ kind: 'inline', el: e as HTMLElement }));
   }
   if (target.kind === 'rule') {
@@ -140,18 +188,29 @@ async function holdersFor(target: PreviewTarget): Promise<Holder[]> {
   return [];
 }
 
+/** 一条预览挂在哪些地方，按挂的地方查：同源元素有几千上万个时，重放不能每个元素都把所有预览的 holders 扫一遍 */
+const holderIndex = new WeakMap<Holder[], Map<HTMLElement | CSSStyleDeclaration, Holder>>();
+
+function holderAt(e: Entry, k: HTMLElement | CSSStyleDeclaration): Holder | undefined {
+  // holders 只会整个换掉，不会原地增删
+  let at = holderIndex.get(e.holders);
+  if (!at) {
+    at = new Map(e.holders.map((h) => [keyOf(h), h]));
+    holderIndex.set(e.holders, at);
+  }
+  return at.get(k);
+}
+
 function reapply(k: HTMLElement | CSSStyleDeclaration) {
   restore(k);
   let any = false;
   for (const e of entries.values()) {
-    for (const h of e.holders) {
-      if (keyOf(h) === k) {
-        write(h, (h.kind === 'inline' && e.per?.get(h.el)) || e.decls);
-        any = true;
-      }
-    }
+    const h = holderAt(e, k);
+    if (!h) continue;
+    write(h, (h.kind === 'inline' && e.per?.get(h.el)) || e.decls);
+    any = true;
   }
-  if (!any) saved.delete(k);
+  if (!any) forget(k);
 }
 
 let chain: Promise<unknown> = Promise.resolve();
@@ -244,7 +303,7 @@ export function clearPreview(id: string): boolean {
   for (const h of e.holders) {
     const k = keyOf(h);
     if (h.kind === 'rule' && !isLive(h.style)) {
-      saved.delete(k);
+      forget(k);
       continue;
     }
     reapply(k);
@@ -267,6 +326,13 @@ export function previewAttached(id: string, el?: Element | null): boolean {
   const e = entries.get(id);
   if (!e) return false;
   return e.holders.some((h) => holderLive(h) && (h.kind === 'rule' || !el || h.el === el));
+}
+
+/** 这条内联预览挂在哪些元素上（只算还在页面上的）；不是内联预览、或者已经撤掉了为 null */
+export function previewElements(id: string): Element[] | null {
+  const e = entries.get(id);
+  if (!e || e.target.kind !== 'inline') return null;
+  return e.holders.flatMap((h) => (h.kind === 'inline' && h.el.isConnected ? [h.el] : []));
 }
 
 /** 热更新换掉了样式表：挂在旧规则上的预览到新样式表里找回同一条规则，重新挂上 */
@@ -310,6 +376,6 @@ const holderLive = (h: Holder) => (h.kind === 'inline' ? h.el.isConnected : isLi
 /** 页面刷新或 DOM 重建后清掉指向失效节点的记录 */
 export function prune() {
   for (const [k, s] of Array.from(saved.entries())) {
-    if (!holderLive(s.holder)) saved.delete(k);
+    if (!holderLive(s.holder)) forget(k);
   }
 }

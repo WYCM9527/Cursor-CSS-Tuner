@@ -1,9 +1,23 @@
-import { overColor, PROP_NAMES, parseColor, propMeta, toHex, type Crumb, type DeclWinner, type ElementSnapshot, type Rgba, type RuleRef, type UsedVar } from '@css-tuner/protocol';
+import {
+  overColor,
+  PROP_NAMES,
+  parseColor,
+  propMeta,
+  toHex,
+  type Crumb,
+  type DeclWinner,
+  type ElementSnapshot,
+  type PropLink,
+  type Rgba,
+  type RuleRef,
+  type UsedVar,
+} from '@css-tuner/protocol';
 import { countAssets } from './assets';
 import { collectRules, matchRules, pickWinner, type FlatRule, type Matched, type RuleIndex } from './cascade';
 import { orderInfo } from './order';
+import { linkScope, linksOf, ruleLinksOf, type LinkScope } from './links';
 import { kindOf } from './page';
-import { originalReader } from './preview';
+import { originalInline, originalReader } from './preview';
 import { propsInfo } from './props';
 import { callersOf, ownerName, sameSourceElements, sourceOf } from './source';
 import { staticSelector } from './specificity';
@@ -82,6 +96,56 @@ function toWinner(el: Element, w: ReturnType<typeof pickWinner>, origin: DeclWin
     inheritedFrom: from ? crumb(from) : null,
     via: w.decl.shorthand ?? w.decl.via,
   };
+}
+
+function hasTailwind(): boolean {
+  return Array.from(document.styleSheets).some((s) => !isOwnSheet(s) && isTailwindSheet(s));
+}
+
+/** 给几条规则算「往里加声明时哪些元素跟着变」：扩展挑规则时还要看文件找不找得到，多备几条 */
+const MAX_ADD_RULES = 6;
+/** 规则命中的元素多过这个数就不算（* 和标签选择器），照旧整条规则一起变 */
+const MAX_RULE_PEERS = 3000;
+const FRAMEWORK_LAYERS = new Set(['theme', 'base', 'properties']);
+
+/**
+ * 没写过的属性要往元素的规则里加声明（见扩展 planner 的 ownRule，挑规则的先后和那边一致：最后一段选择器写着元素自己的类名或 id 的、
+ * 不在 @media 这类条件里的优先）。这些规则各自命中的元素里，哪些属性只该有一部分跟着变。键是规则在 rules 里的下标
+ */
+function addLinks(el: Element, matched: Matched[], scope: LinkScope): Record<number, Record<string, PropLink>> | undefined {
+  const subject = (fr: FlatRule) => fr.fullSelector.split(/\s*[\s>+~]\s*/).pop() ?? '';
+  const own = (fr: FlatRule) => {
+    const last = subject(fr);
+    return Array.from(el.classList).some((c) => last.includes(`.${c}`)) || (!!el.id && last.includes(`#${el.id}`));
+  };
+  const always = (fr: FlatRule) => fr.conditions.every((c) => c.startsWith('@layer'));
+  const rank = (fr: FlatRule) => (own(fr) ? 0 : 2) + (always(fr) ? 0 : 1);
+  // Tailwind 生成的预设样式和工具类不是加声明的地方
+  const generated = (fr: FlatRule) => {
+    if (!isTailwindSheet(fr.topSheet)) return false;
+    if (fr.layer !== null && FRAMEWORK_LAYERS.has(fr.layer.split('.')[0])) return true;
+    return (fr.layer === 'utilities' || fr.layer === null) && !!utilityOf(fr.selector, el);
+  };
+  const candidates = matched
+    .map((m, i) => ({ fr: m.fr, i }))
+    .reverse()
+    .filter(({ fr }) => !generated(fr))
+    .map((c, at) => ({ ...c, at, rank: rank(c.fr) }))
+    .sort((a, b) => a.rank - b.rank || a.at - b.at)
+    .slice(0, MAX_ADD_RULES);
+  const out: Record<number, Record<string, PropLink>> = {};
+  for (const { fr, i } of candidates) {
+    let hits: Element[];
+    try {
+      hits = Array.from(document.querySelectorAll(staticSelector(fr.fullSelector))).filter((e) => !isOwnNode(e));
+    } catch {
+      continue;
+    }
+    if (hits.length < 2 || hits.length > MAX_RULE_PEERS || !hits.includes(el)) continue;
+    const links = ruleLinksOf(el, hits, fr, scope);
+    if (links) out[i] = links;
+  }
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** 元素后面露出来的底色：祖先的背景色从近到远一层层叠，叠到不透明的那层为止，最底下是浏览器默认的白色画布 */
@@ -165,6 +229,10 @@ export async function snapshot(el: Element, idx: RuleIndex = collectRules(isOwnS
 
   const source = await sourceOf(el);
   const peers = source ? await sameSourceElements(el) : [el];
+  const scope = linkScope(idx, originalReader, originalInline, matchedCache, true);
+  const links = peers.length > 1 ? linksOf(el, peers, scope) : undefined;
+  // Tailwind 页面上有源码位置的元素，没写过的属性加的是类名，不往规则里加声明
+  const ruleLinks = source && hasTailwind() ? undefined : addLinks(el, matched, scope);
   const rect = el.getBoundingClientRect();
 
   return {
@@ -181,6 +249,8 @@ export async function snapshot(el: Element, idx: RuleIndex = collectRules(isOwnS
     sourceIndex: Math.max(0, peers.indexOf(el)),
     callers: source ? await callersOf(el, peers) : [],
     classCounts: Object.fromEntries(Array.from(el.classList, (c) => [c, peers.filter((p) => p.classList.contains(c)).length])),
+    ...(links ? { links } : {}),
+    ...(ruleLinks ? { ruleLinks } : {}),
     computed,
     winners,
     vars,

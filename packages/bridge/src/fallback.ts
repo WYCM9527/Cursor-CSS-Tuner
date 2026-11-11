@@ -14,8 +14,10 @@ export function fallbackValues(el: Element, props: string[]): Record<string, str
   const hold = (style: CSSStyleDeclaration) => {
     if (!saved.has(style)) saved.set(style, style.cssText);
   };
-  for (const prop of props) {
-    const w = pickWinner(el, matched, prop, originalReader);
+  // 先把各属性的胜出声明都找好再动手：简写里带 var() 时（border-color: var(--x)），去掉一边之后另外几边的值就读不出来了
+  const winners = props.map((prop) => pickWinner(el, matched, prop, originalReader));
+  for (const [i, prop] of props.entries()) {
+    const w = winners[i];
     const style = w ? (w.inline ? inline : w.fr?.style) : undefined;
     if (style) {
       hold(style);

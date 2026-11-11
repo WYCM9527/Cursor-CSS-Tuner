@@ -1,4 +1,19 @@
-import { PROP_NAMES, t, type ElementSnapshot, type OrderUnit, type PageInfo, type PreviewTarget, type RuleRef, type Scope, type SheetInfo, type SourceLoc, type Target, type TextOrigin } from '@css-tuner/protocol';
+import {
+  activeSegment,
+  PROP_NAMES,
+  t,
+  type ElementSnapshot,
+  type OrderUnit,
+  type PageInfo,
+  type PreviewTarget,
+  type PropLink,
+  type RuleRef,
+  type Scope,
+  type SheetInfo,
+  type SourceLoc,
+  type Target,
+  type TextOrigin,
+} from '@css-tuner/protocol';
 import type { MessageRef, OrderSite, PropSite, PropSiteInfo, TextSite } from '@css-tuner/engine';
 import type { ProjectResolver } from './project';
 import type { LiteralInfo, SiteInfo } from './sites';
@@ -55,6 +70,25 @@ export interface Plan {
   view: Target;
   preview: PreviewTarget;
   write: WriteSpec;
+  /** 改这个属性只动一部分同伴（同源元素，或者规则命中的元素）：预览和改动只算这一组 */
+  link?: PlanLink;
+}
+
+export interface PlanLink {
+  /** 这一组的标识，记进改动的标识里：同一处代码上不同组的改动分开记 */
+  key: string;
+  /** 一次改几个属性时，group 相同的属性跟着变的是同一批元素，记成一条改动 */
+  group: string;
+  /** 这处代码渲染出的元素数；rule 为真时是规则命中的元素数 */
+  total: number;
+  /** 现在的值是继承来的，元素自己没写 */
+  inherited: boolean;
+  /** 按写法分的组：值由同一处声明决定的才一起变（见 ElementSnapshot.links） */
+  byValue: boolean;
+  /** 按类名字符串分的组：这个类在好几段里都写着（条件分支），只改元素用的这一段。值是这一段的类名 */
+  segment?: string;
+  /** 同伴是规则命中的元素（往 CSS 规则里加声明） */
+  rule?: boolean;
 }
 
 export interface PlanContext {
@@ -92,6 +126,27 @@ interface ClassWriteSite {
   override: boolean;
   /** 写在变体字符串里：预览只作用于带这个类的同源元素 */
   withClass?: string;
+  /** 这个类在好几段类名字符串里都写着，只改元素用的那一段 */
+  branch?: Branch;
+}
+
+interface Branch {
+  /** 写着这个类的几段各自的类名 */
+  segs: string[][];
+  /** 元素用的是 segs 里的第几段 */
+  at: number;
+  /** 这一段在这处代码里的序号（变体字符串自己就是位置，没有） */
+  index?: number;
+  /** 是哪几段、用的哪一段：一样的属性跟着变的是同一批元素 */
+  id: string;
+}
+
+/** 类名 token 写在 segs 的好几段里时，元素（带着 classes 这些类）用的是哪一段；只写在一段里就不用分 */
+function branchOf(segs: string[][], token: string, classes: string[]): Branch | undefined {
+  const holding = segs.map((tokens, index) => ({ tokens, index })).filter((s) => s.tokens.includes(token));
+  if (holding.length < 2) return undefined;
+  const at = activeSegment(holding.map((s) => s.tokens), (c) => classes.includes(c));
+  return { segs: holding.map((s) => s.tokens), at, index: holding[at].index, id: `${holding.map((s) => s.index).join('.')}/${at}` };
 }
 
 const FRAMEWORK_LAYERS = new Set(['theme', 'base', 'properties']);
@@ -163,12 +218,26 @@ function planTarget(el: ElementSnapshot, prop: string, ctx: PlanContext): Plan {
   const inline: PreviewTarget = { kind: 'inline', uid: el.uid, sourceKey: sourceKeyOf(el) };
   const instanceAffects = el.source ? el.sameSource : 1;
   const twPage = page.sheets.some((s) => s.tailwind);
+  // 同源元素里只有一部分和选中的写法相同（类名写在条件分支里、style 里的值不一样、值是从不同的外层继承来的）
+  const partial = inline.sourceKey ? el.links?.[prop] : undefined;
+  const valueLink = (link: PropLink, total: number): PlanLink => ({ key: link.by, group: String(link.set), total, inherited: !!link.inherited, byValue: true });
 
   const agent = (reason: string, preview: PreviewTarget = { kind: 'inline', uid: el.uid, sourceKey: null }): Plan => ({
     view: { kind: 'agent', label: t('plan.agent'), affects: preview.kind === 'inline' && preview.sourceKey ? instanceAffects : 1, reason },
     preview,
     write: { kind: 'agent', reason },
   });
+
+  /**
+   * 找不到具体写在哪、但知道是哪段代码渲染的（style 属性、没有对应规则的元素）：Agent 改的是那段代码，同源元素一起预览；
+   * 只有一部分写法相同时只带上这一部分。没算过写法（只有一个元素、同源元素太多）就只预览选中的这个
+   */
+  const together = (reason: string): Plan => {
+    if (!inline.sourceKey || !el.links) return agent(reason);
+    if (!partial) return agent(reason, inline);
+    const p = agent(reason, { ...inline, linked: [prop] });
+    return { ...p, view: { ...p.view, affects: Math.min(instanceAffects, partial.n) }, link: valueLink(partial, instanceAffects) };
+  };
 
   /**
    * 类名写在哪：元素自己的 JSX、外层组件调用处（经 className 参数传进来）、或定义文件里的变体字符串。
@@ -198,11 +267,11 @@ function planTarget(el: ElementSnapshot, prop: string, ctx: PlanContext): Plan {
       x.info.tokens.length ? x.info.tokens.every((t) => el.classes.includes(t)) : x.depth === 1 && !x.info.hasClassName && !!ownInfo?.passesClassName;
     // 变体字符串：含这个类、且其余类大多也在元素上（排除别的变体）；同分取靠后的，cn / cva 里后写的覆盖先写的
     const literalIn = (file: string, depth: number, token: string): ClassWriteSite | null => {
-      const best = (ctx.classLiterals(file) ?? [])
-        .filter((l) => l.tokens.includes(token))
+      const holding = (ctx.classLiterals(file) ?? []).filter((l) => l.tokens.includes(token)).sort((a, b) => a.line - b.line || a.column - b.column);
+      const best = holding
         .map((l) => ({ l, s: l.tokens.filter((t) => el.classes.includes(t)).length / l.tokens.length }))
         .filter((x) => x.s >= 0.5)
-        .sort((a, b) => b.s - a.s || b.l.line - a.l.line)[0]?.l;
+        .sort((a, b) => b.s - a.s || b.l.line - a.l.line || b.l.column - a.l.column)[0]?.l;
       if (!best) return null;
       return {
         file,
@@ -214,6 +283,10 @@ function planTarget(el: ElementSnapshot, prop: string, ctx: PlanContext): Plan {
         literal: true,
         override: false,
         withClass: token,
+        // 好几个变体都写着这个类：带着它的同源元素里，只有用这个变体的跟着变
+        ...(holding.length > 1
+          ? { branch: { segs: holding.map((l) => l.tokens), at: holding.indexOf(best), id: `${holding.map((l) => `${l.line}:${l.column}`).join('.')}/${holding.indexOf(best)}` } }
+          : {}),
       };
     };
     const recipeBase = (): ClassWriteSite | null => {
@@ -232,11 +305,16 @@ function planTarget(el: ElementSnapshot, prop: string, ctx: PlanContext): Plan {
       return own;
     }
 
+    // 同一个类在三元的两个分支里都写着时，只改元素用的那个分支
+    const inBranch = (site: ClassWriteSite, info: SiteInfo | null): ClassWriteSite => {
+      const branch = info ? branchOf(info.segments, utility, el.classes) : undefined;
+      return branch ? { ...site, branch } : site;
+    };
     let where: ClassWriteSite | null = null;
-    if (!ownInfo || ownInfo.tokens.includes(utility)) where = own;
+    if (!ownInfo || ownInfo.tokens.includes(utility)) where = inBranch(own, ownInfo);
     else {
       const x = callers.find((x) => x.info.tokens.includes(utility));
-      if (x) where = atCaller(x, false);
+      if (x) where = inBranch(atCaller(x, false), x.info);
     }
     where ??= literalIn(own.file, 0, utility);
     for (const x of callers) where ??= literalIn(x.file, x.depth, utility);
@@ -253,10 +331,31 @@ function planTarget(el: ElementSnapshot, prop: string, ctx: PlanContext): Plan {
     if (!srcFile || !el.source) return agent(t('plan.noJsxSource'));
     const site = classSite(utility);
     if ('reason' in site) return agent(site.reason);
-    const preview: PreviewTarget =
-      site.depth === 0 && !site.withClass ? inline : { ...inline, ...(site.depth ? { depth: site.depth } : {}), ...(site.withClass ? { withClass: site.withClass } : {}) };
+    // 只带上和选中的写法相同、类名又来自同一段字符串的那一部分同源元素
+    const { branch } = site;
+    const preview: PreviewTarget = {
+      ...inline,
+      ...(site.depth ? { depth: site.depth } : {}),
+      ...(site.withClass ? { withClass: site.withClass } : {}),
+      ...(partial ? { linked: [prop] } : {}),
+      ...(branch ? { segs: branch.segs, seg: branch.at } : {}),
+    };
+    // 规划时只能估个数（这一段的类名里最少见的那个有几个元素带着），记进改动时按预览实际作用到的算
+    const affects = Math.min(site.affects, partial?.n ?? site.affects, ...(branch ? branch.segs[branch.at].map((c) => el.classCounts?.[c] ?? site.affects) : []));
+    const link: PlanLink | undefined =
+      partial || branch
+        ? {
+            key: `${partial ? partial.by : ''}${branch?.index !== undefined ? `@${branch.index}` : ''}`,
+            group: `${partial ? partial.set : ''}${branch ? `@${branch.id}` : ''}`,
+            total: site.affects,
+            inherited: !!partial?.inherited,
+            byValue: !!partial,
+            ...(branch ? { segment: branch.segs[branch.at].join(' ') } : {}),
+          }
+        : undefined;
     return {
-      view: { kind: 'tailwind', label: site.label, file: site.file, line: site.line, column: site.column, affects: site.affects },
+      view: { kind: 'tailwind', label: site.label, file: site.file, line: site.line, column: site.column, affects },
+      ...(link ? { link } : {}),
       preview,
       write: {
         kind: 'tailwind',
@@ -271,19 +370,24 @@ function planTarget(el: ElementSnapshot, prop: string, ctx: PlanContext): Plan {
     };
   };
 
-  const css = (ref: RuleRef, mode: 'edit' | 'add', via: string | null): Plan => {
+  /**
+   * some：往规则里加声明、而规则命中的元素里只有一部分和选中的写法相同（比如颜色是从不同的外层继承来的）。
+   * 直接改规则会让它们全都变，预览改成只作用于这一部分，交给 Agent 时说清只改这几个
+   */
+  const css = (ref: RuleRef, mode: 'edit' | 'add', via: string | null, some?: PropLink): Plan => {
     const file = project.sheetFile(pageUrl, ref.sheet);
     if (!file) return agent(t('plan.noRuleFile'), { kind: 'rule', rule: ref, uid: el.uid });
     const src = ctx.ruleSource(file, ref);
     const real = src?.file ?? file;
     return {
-      view: { kind: 'css', label: `${project.label(real)} ${src?.selector ?? prettySelector(ref)}`, file: real, affects: ref.matchCount },
-      preview: { kind: 'rule', rule: ref, uid: el.uid },
+      view: { kind: 'css', label: `${project.label(real)} ${src?.selector ?? prettySelector(ref)}`, file: real, affects: some ? Math.min(ref.matchCount, some.n) : ref.matchCount },
+      ...(some ? { link: { ...valueLink(some, ref.matchCount), rule: true } } : {}),
+      preview: some ? { kind: 'inline', uid: el.uid, sourceKey: null, among: ref.fullSelector, linked: [prop] } : { kind: 'rule', rule: ref, uid: el.uid },
       write: { kind: 'css', file, selector: ref.selector, fullSelector: ref.fullSelector, conditions: ref.conditions, ordinal: ref.ordinal, mode, via },
     };
   };
 
-  if (w?.origin === 'inline') return agent(t('plan.inlineStyle'));
+  if (w?.origin === 'inline') return together(t('plan.inlineStyle'));
 
   if (w?.origin === 'rule' && w.rule && !isFramework(page, w.rule, ctx)) {
     const utility = utilityOf(w.rule, ctx);
@@ -297,8 +401,57 @@ function planTarget(el: ElementSnapshot, prop: string, ctx: PlanContext): Plan {
   // 没有作者声明（继承、初始值或只命中了 Tailwind 预设样式）：Tailwind 项目加类名，CSS 项目加到元素自己的规则里
   if (twPage && el.source && srcFile) return tailwind(null);
   const own = ownRule(el, page, ctx, (r) => !utilityOf(r, ctx) && !!project.sheetFile(pageUrl, r.sheet));
-  if (own) return css(own, 'add', null);
-  return agent(t('plan.noWritableRule'));
+  if (own) return css(own, 'add', null, el.ruleLinks?.[el.rules.indexOf(own)]?.[prop]);
+  return together(t('plan.noWritableRule'));
+}
+
+/**
+ * 同一处代码的标识：Tailwind 是 JSX 调用位置，CSS 是那条规则，找不到位置的是元素。
+ * 后面可能接 `~这一组的记号`（见 groupMark），所以标识里的 ~ 后面一定还有 |：文件路径、选择器后面都还有别的段，
+ * 元素的源码位置排在最后，里面的 ~ 换掉
+ */
+export function siteKey(p: Plan, el: ElementSnapshot): string {
+  const w = p.write;
+  if (w.kind === 'tailwind') return `tw|${w.file}|${w.line}|${w.column}`;
+  if (w.kind === 'css') return `css|${w.file}|${w.fullSelector}|${w.conditions.join('|')}|${w.ordinal}`;
+  if (w.kind === 'theme') return `theme|${w.file}|${w.name}`;
+  if (p.preview.kind === 'rule') return `agent|rule|${p.preview.rule.sheet.index}|${p.preview.rule.fullSelector}|${p.preview.rule.conditions.join('|')}|${p.preview.rule.ordinal}`;
+  return `agent|${(sourceKeyOf(el) ?? el.uid).replace(/~/g, '¦')}`;
+}
+
+/** 这一组的记号：改这个属性只动一部分同伴时（类名写在条件分支里、值是从不同的外层继承来的），各组的改动分开记 */
+export const groupMark = (p: Plan | undefined) => (p?.link?.key ? `~${p.link.key}` : '');
+
+/** 样式改动记在哪：代码位置，加上这一组的记号。改动的标识是它后面接 `|属性`（见 records 的 siteOfKey） */
+export function targetKey(p: Plan, el: ElementSnapshot): string {
+  return `${siteKey(p, el)}${groupMark(p)}`;
+}
+
+/** 只带上写法相同的同伴的预览：一条改动管几个属性，就要这几个属性都相同 */
+export function linkedPreview(preview: PreviewTarget, props: string[]): PreviewTarget {
+  return preview.kind === 'inline' && preview.linked ? { ...preview, linked: [...props].sort() } : preview;
+}
+
+/**
+ * 按代码位置分组：同一组的属性记成一条改动。同一处代码上跟着变的元素不一样的属性分开记
+ * （四边的描边色里上边只有选中的这个用、另外三边还有别的元素也用：上边一条，另外三边一条）。
+ * tk 是这一组改动记在哪（见 targetKey），记号取排在最前面的属性的：同一组里各属性由不同的声明决定时记号不一样
+ */
+export function groupByTarget(planOf: (prop: string) => Plan | undefined, el: ElementSnapshot, props: string[]): Array<{ tk: string; plan: Plan; props: string[] }> {
+  const groups = new Map<string, { plan: Plan; props: string[] }>();
+  for (const prop of props) {
+    const p = planOf(prop);
+    if (!p) continue;
+    const k = `${siteKey(p, el)}~${p.link?.group ?? ''}`;
+    const g = groups.get(k) ?? { plan: p, props: [] };
+    g.props.push(prop);
+    groups.set(k, g);
+  }
+  return [...groups.values()].map((g) => ({
+    tk: targetKey(planOf([...g.props].sort()[0])!, el),
+    plan: { ...g.plan, preview: linkedPreview(g.plan.preview, g.props) },
+    props: g.props,
+  }));
 }
 
 /**
