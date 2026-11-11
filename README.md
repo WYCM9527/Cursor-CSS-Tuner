@@ -86,8 +86,8 @@ CI 跑不了内置浏览器，端到端测试在本机的 Cursor 里跑：扩展
 `docs/media/` 里的动图和截图用真实的页面和真实的面板状态逐帧合成，演示页是 `fixtures/demo`（`pnpm --filter fixture-demo dev`）：
 
 1. **面板状态**：在开发宿主里跑自测，每一步之后用 `dumpState` 把面板状态导出到 `packages/panel/public/`（这里的 `*.json` 不进仓库）。状态里有扩展按当前语言写的说明（比如交给 Agent 的原因），中英文各跑一遍，开头用 `locale` 步骤切换语言。
-2. **面板帧**：启动面板调试页，打开 `shots.html?lang=en&spec=/shots.json`。spec 把各帧按网格排开渲染，`drag` 模拟按住数值字段拖动，`point` 指定指针落点；渲染完后 `window.__shots` 给出每帧的位置、指针坐标和字段的值。格式见 `packages/panel/src/shots.tsx`。`prefs` 是各分区的折叠状态，要带上 `v: 1`，否则面板会把改动清单折叠起来；一份 spec 里的帧共用同一套折叠状态，改动清单展开的帧（比如总览图）另写一份 spec。
-3. **页面帧**：在 Cursor 内置浏览器里打开演示页，用 `<script>` 加载 `packages/extension/media/bridge.js`，`__cssTunerBridge.boot(...)` 之后通过 `window.__CSS_TUNER__.call('select' | 'hover' | 'preview', ...)` 驱动选中、悬停和预览；应用之后的帧直接改源码，等热更新。
+2. **面板帧**：启动面板调试页，打开 `shots.html?lang=en&spec=/shots.json`。spec 把各帧按网格排开渲染，`drag` 模拟按住数值字段拖动，`point` 指定指针落点；渲染完后 `window.__shots` 给出每帧的位置、指针坐标和字段的值。格式见 `packages/panel/src/shots.tsx`。`prefs` 是各分区的折叠状态，要带上 `v: 2`，不带的话面板会把改动清单折叠起来；一份 spec 里的帧共用同一套折叠状态，改动清单展开的帧（比如总览图）另写一份 spec。
+3. **页面帧**：在浏览器里打开演示页（Cursor 内置浏览器的标签页不够 880 宽时用无头 Chrome），加载 `packages/extension/media/bridge.js`，`__cssTunerBridge.boot(...)` 之后通过 `window.__CSS_TUNER__.call('setPick' | 'preview' | 'clearAllPreviews', ...)` 开自由选择、发预览、撤预览；悬停和点选用 CDP 的 `Input.dispatchMouseEvent` 发鼠标事件，选中的元素平时不画框，指针移开再移回才显示。应用之后的帧直接改源码，等热更新。
 4. **合成**：写一份分镜 JSON（每帧的面板裁切位置、页面截图、指针和停留时间），运行 `node scripts/media/compose.mjs <分镜文件>` 输出动图和静态截图。
 
 截图用 CDP 的 `Page.captureScreenshot`。两个坑：模拟的视口不能比标签页的实际尺寸大，否则超出的部分是错乱的画面；窗口被别的窗口完全挡住时浏览器不出新帧，截图会一直等（`screenshot` 步骤默认 5 秒超时）。

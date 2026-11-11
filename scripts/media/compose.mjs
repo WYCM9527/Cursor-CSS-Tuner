@@ -20,7 +20,7 @@ import pngjs from 'pngjs';
 import gifenc from 'gifenc';
 
 const { PNG } = pngjs;
-const { GIFEncoder, quantize, applyPalette } = gifenc;
+const { GIFEncoder, quantize } = gifenc;
 
 const boardFile = resolve(process.argv[2] ?? '');
 const board = JSON.parse(readFileSync(boardFile, 'utf8'));
@@ -141,10 +141,41 @@ while (palette.length < 255) palette.push([0, 0, 0]);
 const opaque = palette.slice();
 const TRANSPARENT = palette.push([255, 0, 255]) - 1;
 
+/**
+ * 每种颜色各自找最近的调色板色，所有帧共用一份对照。
+ * gifenc 的 applyPalette 按 rgb565 分箱缓存：同一箱里先遇到哪个颜色，整箱都跟它走，
+ * 纯白会跟着旁边的近白色变灰，而且每帧先遇到的不一样，同一块白底在帧之间会跳色
+ */
+const nearest = new Map();
+function toIndex(data) {
+  const index = new Uint8Array(data.length / 4);
+  for (let i = 0; i < index.length; i++) {
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
+    const key = (r << 16) | (g << 8) | b;
+    let at = nearest.get(key);
+    if (at === undefined) {
+      let best = Infinity;
+      at = 0;
+      for (let k = 0; k < opaque.length; k++) {
+        const d = (r - opaque[k][0]) ** 2 + (g - opaque[k][1]) ** 2 + (b - opaque[k][2]) ** 2;
+        if (d < best) {
+          best = d;
+          at = k;
+        }
+      }
+      nearest.set(key, at);
+    }
+    index[i] = at;
+  }
+  return index;
+}
+
 const gif = GIFEncoder();
 let prev = null;
 frames.forEach(({ img, delay }, k) => {
-  const index = applyPalette(img.data, opaque, 'rgb565');
+  const index = toIndex(img.data);
   const shown = index.slice();
   if (prev) for (let i = 0; i < index.length; i++) if (index[i] === prev[i]) index[i] = TRANSPARENT;
   gif.writeFrame(index, W, H, { ...(k === 0 ? { palette } : {}), delay, transparent: true, transparentIndex: TRANSPARENT, dispose: 1 });
