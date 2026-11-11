@@ -155,6 +155,8 @@ export class Controller implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private sessionSubs: vscode.Disposable[] = [];
   private helloCount = 0;
+  /** 用户开着自由选择：页面重载后桥接是新的，要重新打开 */
+  private pickWanted = false;
   private lastSelection: { path: string; line: number; column: number; index: number } | null = null;
   private selectionWaiters: Array<(s: SelectionView | null) => void> = [];
   private plans = new Map<string, Plan>();
@@ -537,21 +539,23 @@ export class Controller implements vscode.Disposable {
     this.session?.dispose();
     this.session = null;
     this.helloCount = 0;
+    this.pickWanted = false;
   }
 
+  /** 自由选择：页面上点哪个选哪个，一直开到再点一次按钮；同一个标签页重载后接着开 */
   async setPick(on: boolean) {
     if (!this.session?.connected) {
       if (on) this.notify('warn', t('ext.pick.noPage'));
       return;
     }
     await this.session.call('setPick', { on });
+    this.pickWanted = on;
     this.state.pickOn = on;
-    if (on) this.state.measureOn = false;
     this.push();
     if (on) await this.browser.focus(this.session.browserId);
   }
 
-  /** 标尺：和选取元素互斥，页面上 Esc 退出 */
+  /** 标尺：和自由选择可以同时开，页面上 Esc 关掉 */
   async setMeasure(on: boolean) {
     if (!this.session?.connected) {
       if (on) this.notify('warn', t('ext.pick.noPage'));
@@ -559,7 +563,6 @@ export class Controller implements vscode.Disposable {
     }
     await this.session.call('setMeasure', { on });
     this.state.measureOn = on;
-    if (on) this.state.pickOn = false;
     this.push();
     if (on) await this.browser.focus(this.session.browserId);
   }
@@ -580,9 +583,11 @@ export class Controller implements vscode.Disposable {
         this.state.selection = null;
         this.assets.forget();
         await this.setPage(ev.page);
-        this.state.pickOn = false;
+        this.state.pickOn = this.pickWanted;
         this.state.measureOn = false;
         this.push();
+        // 扩展重启前开着自由选择的旧页面，也要按这边的记录关掉
+        await this.session?.call('setPick', { on: this.pickWanted }).catch(() => undefined);
         await this.onHello(this.helloCount > 1);
         return;
       }

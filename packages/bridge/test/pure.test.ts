@@ -7,6 +7,7 @@ import { dropSlot, flowOffsets, slotLine } from '../src/drop';
 import { hasRun, sameOrder, textSig } from '../src/sig';
 import { readDecl, type Reader } from '../src/cascade';
 import { idRefs, localUrl, srgbColor } from '../src/assets';
+import { holdZone, shown } from '../src/overlay';
 
 const box = (x: number, y: number, w: number, h: number) => ({ x, y, left: x, top: y, width: w, height: h, right: x + w, bottom: y + h }) as DOMRect;
 
@@ -79,6 +80,51 @@ describe('拖动换序的落点', () => {
     expect(dropSlot(cols, 55, 10, 'x')).toBe(1);
     expect(slotLine(cols, 1, 'x')).toMatchObject({ x: 44, w: 2, y: 0, h: 20 });
     expect(slotLine(rows, 3, 'y')).toMatchObject({ x: 0, w: 100, y: 81 });
+  });
+});
+
+describe('页面上画的框', () => {
+  const at = (s: Partial<Parameters<typeof shown<string>>[0]>) => shown<string>({ sel: null, hover: null, muted: null, fromPanel: false, measuring: false, ...s });
+
+  it('悬停别的元素画虚线框，选中元素不画', () => {
+    expect(at({ sel: 'a', hover: 'b' })).toEqual({ hover: 'b', sel: null });
+    expect(at({ hover: 'b' })).toEqual({ hover: 'b', sel: null });
+  });
+
+  it('刚点选的元素指针移开之前不画；移开再移回来画整套', () => {
+    expect(at({ sel: 'a', hover: 'a', muted: 'a' })).toEqual({ hover: null, sel: null });
+    expect(at({ sel: 'a', hover: 'a' })).toEqual({ hover: null, sel: 'full' });
+  });
+
+  it('点了别的元素、还没换好选中时，也不给它画虚线框', () => {
+    expect(at({ sel: 'a', hover: 'b', muted: 'b' })).toEqual({ hover: null, sel: null });
+  });
+
+  it('面板上悬停选中元素那一行：刚点选过也画整套', () => {
+    expect(at({ sel: 'a', hover: 'a', muted: 'a', fromPanel: true })).toEqual({ hover: null, sel: 'full' });
+  });
+
+  it('量距离时选中元素只描边', () => {
+    expect(at({ sel: 'a', hover: 'b', measuring: true })).toEqual({ hover: 'b', sel: 'outline' });
+  });
+});
+
+describe('把手保持带', () => {
+  const r = (left: number, top: number, right: number, bottom: number) => ({ left, top, right, bottom });
+
+  it('标签在元素上面：从标签顶连到元素上边，横向盖住把手和标签', () => {
+    const z = holdZone(r(275, 152, 500, 172), r(255, 152, 271, 172), r(255, 176, 454, 498));
+    expect(z).toEqual(r(251, 148, 504, 180));
+  });
+
+  it('元素贴着页面顶、标签放在下面：从元素下边连到标签底', () => {
+    const z = holdZone(r(22, 54, 200, 74), r(2, 54, 18, 74), r(2, 0, 300, 50));
+    expect(z).toEqual(r(-2, 46, 204, 78));
+  });
+
+  it('元素贴着右边、标签往左挪：带子横向一直连到元素', () => {
+    const z = holdZone(r(470, 76, 560, 96), r(450, 76, 466, 96), r(600, 100, 700, 150));
+    expect(z).toEqual(r(446, 72, 604, 104));
   });
 });
 

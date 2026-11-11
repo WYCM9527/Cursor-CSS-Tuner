@@ -1,7 +1,5 @@
 import { formatNumber, type MeasureStep } from '@css-tuner/protocol';
-import { setHover, setMeasureDraw, type MeasureDraw } from './overlay';
-import { pickOn } from './pick';
-import { OWN_ATTR, isOwnNode } from './util';
+import { setMeasureDraw, type MeasureDraw } from './overlay';
 
 export interface Box {
   left: number;
@@ -82,128 +80,32 @@ export function spanLabel(px: number, steps: MeasureStep[]): string {
   return step ? `${n} · ${step.label}` : n;
 }
 
-interface Hooks {
-  /** 量的起点：选中元素 */
-  anchor: () => Element | null;
-  pick: (el: Element) => void;
-  exit: () => void;
-}
-
-let hooks: Hooks | null = null;
-let on = false;
-let alt = false;
+/** 量的起点：选中元素 */
+let anchor: () => Element | null = () => null;
 let target: Element | null = null;
 let steps: MeasureStep[] = [];
-let cursorStyle: HTMLStyleElement | null = null;
-
-function hit(e: Event): Element | null {
-  for (const n of e.composedPath()) {
-    if (n instanceof Element && !isOwnNode(n)) return n === document.documentElement || n === document.body ? null : n;
-  }
-  return null;
-}
 
 function draw(): MeasureDraw | null {
-  const a = hooks?.anchor();
+  const a = anchor();
   const b = target;
   if (!a || !b || a === b || !b.isConnected) return null;
   const m = measure(a.getBoundingClientRect(), b.getBoundingClientRect());
   return { spans: m.spans.map((s) => ({ ...s, label: spanLabel(s.to - s.from, steps) })), guides: m.guides };
 }
 
-function aim(e: PointerEvent) {
-  target = hit(e);
-  setHover(target);
-  setMeasureDraw(draw);
-}
-
-function block(e: Event) {
-  e.preventDefault();
-  e.stopPropagation();
-  e.stopImmediatePropagation();
-}
-
-function click(e: MouseEvent) {
-  block(e);
-  const el = hit(e);
-  if (el) hooks?.pick(el);
-}
-
-function key(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return;
-  block(e);
-  setMeasure(false);
-}
-
-// 没开标尺时按住 Alt 悬停也量（只看不拦，页面照常响应）
-function altMove(e: PointerEvent) {
-  if (on) return;
-  if (!e.altKey || pickOn() || !hooks?.anchor()) {
-    if (alt) stopAlt();
-    return;
-  }
-  alt = true;
-  aim(e);
-}
-
-function altKeyUp(e: KeyboardEvent) {
-  if (alt && (e.key === 'Alt' || !e.altKey)) stopAlt();
-}
-
-function stopAlt() {
-  alt = false;
-  target = null;
-  setHover(null);
-  setMeasureDraw(null);
-}
-
-const passthrough = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'dblclick', 'contextmenu', 'auxclick'] as const;
-
-export function initMeasure(h: Hooks) {
-  hooks = h;
-  window.addEventListener('pointermove', altMove, { capture: true, passive: true });
-  window.addEventListener('keyup', altKeyUp, true);
-  window.addEventListener('blur', stopAlt);
+export function initMeasure(a: () => Element | null) {
+  anchor = a;
 }
 
 export function disposeMeasure() {
-  setMeasure(false);
-  if (alt) stopAlt();
-  window.removeEventListener('pointermove', altMove, true);
-  window.removeEventListener('keyup', altKeyUp, true);
-  window.removeEventListener('blur', stopAlt);
-  hooks = null;
+  measureTo(null);
+  anchor = () => null;
 }
 
-export function setMeasure(v: boolean) {
-  if (v === on) return;
-  on = v;
-  if (alt) stopAlt();
-  if (on) {
-    window.addEventListener('pointermove', aim, true);
-    window.addEventListener('click', click, true);
-    window.addEventListener('keydown', key, true);
-    for (const t of passthrough) window.addEventListener(t, block, true);
-    cursorStyle = document.createElement('style');
-    cursorStyle.setAttribute(OWN_ATTR, '');
-    cursorStyle.textContent = 'html, html * { cursor: crosshair !important; }';
-    (document.head || document.documentElement).appendChild(cursorStyle);
-  } else {
-    window.removeEventListener('pointermove', aim, true);
-    window.removeEventListener('click', click, true);
-    window.removeEventListener('keydown', key, true);
-    for (const t of passthrough) window.removeEventListener(t, block, true);
-    cursorStyle?.remove();
-    cursorStyle = null;
-    target = null;
-    setHover(null);
-    setMeasureDraw(null);
-    hooks?.exit();
-  }
-}
-
-export function measureOn(): boolean {
-  return on;
+/** 量 el 和选中元素之间的距离（元素滚动、动画时跟着走），null 收起量线 */
+export function measureTo(el: Element | null) {
+  target = el;
+  setMeasureDraw(el ? draw : null);
 }
 
 export function setMeasureSteps(s: MeasureStep[]) {

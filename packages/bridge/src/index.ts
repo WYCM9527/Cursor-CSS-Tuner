@@ -4,10 +4,10 @@ import { installHook } from './devtools';
 import { beginEdit, finish as finishEdit, isEditingText, textAt } from './edit';
 import { fallbackValues } from './fallback';
 import { visibleBoxes } from './order';
-import { redraw, setDragModel, setGripHidden, setHover, setSelected } from './overlay';
+import { mute, redraw, setDragModel, setGripHidden, setHover, setSelected } from './overlay';
 import { pageFonts, pageInfo } from './page';
-import { disposeMeasure, initMeasure, measureOn, setMeasure, setMeasureSteps } from './measure';
-import { pickOn, setPick } from './pick';
+import { disposeMeasure, initMeasure, setMeasureSteps } from './measure';
+import { disposePick, initPick, measureOn, pickOn, setMeasure, setPick } from './pick';
 import { activeOrder, clearAll, clearPreview, hasOrderPreviews, preview, prune, reapplyOrders, reattachRules } from './preview';
 import { snapshot } from './snapshot';
 import { findBySource, sameSourceElements, sourceOf, warmSources, whenHydrated } from './source';
@@ -60,14 +60,22 @@ class Bridge {
     this.watch();
     this.connect();
     window.addEventListener('dblclick', this.onDblClick, true);
-    initMeasure({
-      anchor: () => (this.selected?.isConnected ? this.selected : null),
-      pick: (el) => void this.select(el),
-      exit: () => {
-        setGripHidden(false);
+    const anchor = () => (this.selected?.isConnected ? this.selected : null);
+    initMeasure(anchor);
+    initPick({
+      anchor,
+      pick: (el) => {
+        finishEdit(true);
+        mute(el);
+        if (el !== this.selected) void this.select(el);
+      },
+      edit: (x, y) => void this.editAt(x, y),
+      measureOff: () => {
+        this.syncGrip();
         this.send({ t: 'measure', on: false });
       },
     });
+    this.syncGrip();
     this.urlTimer = window.setInterval(() => {
       if (location.href !== this.lastHref) {
         this.lastHref = location.href;
@@ -86,7 +94,7 @@ class Bridge {
     this.observer?.disconnect();
     window.removeEventListener('dblclick', this.onDblClick, true);
     finishEdit(false);
-    setPick(false);
+    disposePick();
     disposeMeasure();
     clearAll();
     setSelected(null);
@@ -312,22 +320,33 @@ class Bridge {
     return this.emitSelection();
   }
 
-  /** 选中元素里面的文字双击就地编辑；文字不在选中元素自己身上时先改选文字所在的元素 */
-  private onDblClick = (e: MouseEvent) => {
-    if (pickOn() || measureOn() || isEditingText() || !this.selected || !this.connected()) return;
-    const hit = textAt(e.clientX, e.clientY, this.selected);
+  /** 选中元素里面 (x, y) 处的文字就地编辑；文字不在选中元素自己身上时先改选文字所在的元素。那里没有能改的文字返回 false */
+  private editAt(x: number, y: number): boolean {
+    if (isEditingText() || !this.selected || !this.connected()) return false;
+    const hit = textAt(x, y, this.selected);
     const el = hit?.node.parentElement;
-    if (!hit || !el || isOwnNode(el) || el.isContentEditable || el.closest('input, textarea, select')) return;
+    if (!hit || !el || isOwnNode(el) || el.isContentEditable || el.closest('input, textarea, select')) return false;
     const segment = textNodesOf(el).indexOf(hit.node);
-    if (segment < 0) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
+    if (segment < 0) return false;
     void (async () => {
       if (el !== this.selected) await this.select(el);
       const uid = uidOf(el);
       beginEdit(hit.node, hit.offset, (value, phase) => this.send({ t: 'editText', uid, segment, value, phase }));
     })();
+    return true;
+  }
+
+  /** 自由选择里的双击由 pick.ts 拦下来转给 editAt */
+  private onDblClick = (e: MouseEvent) => {
+    if (pickOn() || measureOn() || !this.editAt(e.clientX, e.clientY)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
   };
+
+  /** 把手只在自由选择里露出来；标尺开着时点击留给改选中 */
+  private syncGrip() {
+    setGripHidden(!pickOn() || measureOn());
+  }
 
   private handlers: Handlers = {
     ping: () => 'pong',
@@ -337,23 +356,14 @@ class Bridge {
       return pageInfo();
     },
     setPick: ({ on }) => {
-      if (on) setMeasure(false);
-      setPick(
-        on,
-        (el) => void this.select(el),
-        () => {
-          setGripHidden(false);
-          this.send({ t: 'pick', on: false });
-        },
-      );
-      setGripHidden(pickOn());
+      setPick(on);
+      this.syncGrip();
       this.send({ t: 'pick', on: pickOn() });
       return pickOn();
     },
     setMeasure: ({ on }) => {
-      if (on) setPick(false);
       setMeasure(on);
-      setGripHidden(measureOn());
+      this.syncGrip();
       this.send({ t: 'measure', on: measureOn() });
       return measureOn();
     },
@@ -390,7 +400,7 @@ class Bridge {
     },
     hover: ({ uid }) => {
       const el = uid ? elOf(uid) : null;
-      setHover(el);
+      setHover(el, true);
       return !!el;
     },
     probe: ({ id, target, expected, source }) =>

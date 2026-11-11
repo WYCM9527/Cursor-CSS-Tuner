@@ -102,12 +102,55 @@ defineStep('reload', async (c, s) => {
   return { connection: c.state.connection, restored: summarize(sel, (s.props as string[]) ?? []) };
 });
 
-defineStep('pick', async (c) => {
-  await c.setPick(true);
-  const on = c.state.pickOn;
-  const inPage = await c.browser.exec(c.session!.browserId, '!!document.querySelector("style[data-css-tuner]")');
-  await c.setPick(false);
-  return { on, cursorStyleInjected: inPage, offAfter: c.state.pickOn };
+/** 页面上现在画了什么：悬停框、选中框、标签、把手、同源元素的框、量线上的数字，以及指针是不是十字 */
+const overlayDrawn = (c: Controller) =>
+  c.browser.exec<Record<string, unknown>>(
+    c.session!.browserId,
+    `new Promise((done) => setTimeout(() => {
+      const root = document.querySelector('css-tuner-overlay')?.shadowRoot;
+      const shown = (s) => [...(root?.querySelectorAll(s) ?? [])].filter((d) => !d.classList.contains('hidden'));
+      done({
+        hover: shown('.hov-outline').length,
+        sel: shown('.sel-outline').length,
+        tags: shown('.tag').map((d) => d.textContent),
+        grip: shown('.grip').length,
+        peers: shown('.peer').length,
+        labels: shown('.mlabel').map((d) => d.textContent),
+        crosshair: [...document.querySelectorAll('style[data-css-tuner]')].some((s) => s.textContent.includes('crosshair')),
+      });
+    }, 200))`,
+  );
+
+/**
+ * 自由选择：on 开关；hover 对 selector 的第 index 个元素合成一次指针移动，click 在它上面合成按下、松开、点击（等选中换过来），
+ * leave 合成指针离开页面，key 在页面上按一个键。返回页面上画了什么
+ */
+defineStep('pick', async (c, s) => {
+  const id = c.session!.browserId;
+  if (s.on !== undefined) await c.setPick(!!s.on);
+  const fire = (selector: unknown, types: string[]) =>
+    c.browser.exec<boolean>(
+      id,
+      `(() => {
+        const el = document.querySelectorAll(${JSON.stringify(String(selector))})[${Number(s.index) || 0}];
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        const init = { bubbles: true, composed: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0, view: window };
+        for (const t of ${JSON.stringify(types)}) el.dispatchEvent(t.startsWith('pointer') ? new PointerEvent(t, init) : new MouseEvent(t, init));
+        return true;
+      })()`,
+    );
+  const out: Record<string, unknown> = {};
+  if (s.hover) out.found = await fire(s.hover, ['pointermove']);
+  if (s.click) {
+    const before = c.state.selection?.el.uid;
+    out.found = await fire(s.click, ['pointermove', 'pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']);
+    for (let i = 0; i < 30 && c.state.selection?.el.uid === before; i++) await new Promise((r) => setTimeout(r, 100));
+    out.selected = c.state.selection?.el.label ?? null;
+  }
+  if (s.leave) await c.browser.exec(id, `document.documentElement.dispatchEvent(new PointerEvent('pointerout', { bubbles: true, composed: true, relatedTarget: null }))`);
+  if (s.key) await c.browser.exec(id, `window.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(String(s.key))}, bubbles: true, cancelable: true }))`);
+  return { ...out, drawn: await overlayDrawn(c), pickOn: c.state.pickOn, measureOn: c.state.measureOn };
 });
 
 defineStep('badToken', async (c) => {
@@ -478,6 +521,10 @@ defineStep('pageDrag', async (c, s) => {
   const id = c.session!.browserId;
   const before = JSON.stringify(c.state.changes.map((ch) => [ch.id, ch.to]));
   const over = `document.querySelectorAll(${JSON.stringify(String(s.over))})[${Number(s.index) || 0}]`;
+  // 把手只在自由选择里、悬停到选中元素上时露出来
+  const picking = c.state.pickOn;
+  if (!picking) await c.setPick(true);
+  await c.handle({ t: 'hover', uid: c.state.selection?.el.uid ?? null });
   // 窗口在后台时页面的定时器被节流，覆盖层可能还没画出把手
   const shown = `!!document.querySelector('css-tuner-overlay')?.shadowRoot?.querySelector('.grip:not(.hidden)')`;
   for (let i = 0; i < 30 && !(await c.browser.exec<boolean>(id, shown)); i++) await new Promise((r) => setTimeout(r, 100));
@@ -507,6 +554,8 @@ defineStep('pageDrag', async (c, s) => {
   const deadline = Date.now() + 3000;
   while (JSON.stringify(c.state.changes.map((ch) => [ch.id, ch.to])) === before && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
   await new Promise((r) => setTimeout(r, 200));
+  await c.handle({ t: 'hover', uid: null });
+  if (!picking) await c.setPick(false);
   return { drag, order: orderLine(c.state.selection), page: await visualOrder(c, s.read), changes: changeLines(c) };
 });
 

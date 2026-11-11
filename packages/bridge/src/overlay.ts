@@ -1,16 +1,10 @@
 import { dropSlot, slotLine } from './drop';
 import { OWN_ATTR, labelOf } from './util';
 
-// 只用灰阶，而且要在任意颜色的页面上都看得见：描边和外边距斜线都是黑白两层，填充用半透明中灰
+// 只用灰阶，而且要在任意颜色的页面上都看得见：线都是黑白两层，拖动时的影子用半透明中灰
 const STYLE = `
 :host { all: initial; }
-.box { position: fixed; pointer-events: none; box-sizing: border-box; border-style: solid; border-width: 0; }
-.m { border-color: transparent;
-  background: repeating-linear-gradient(-45deg, rgba(0, 0, 0, 0.3) 0 1px, rgba(255, 255, 255, 0.45) 1px 2px, transparent 2px 6px) border-box;
-  mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0); mask-composite: exclude; }
-.bd { border-color: rgba(128, 128, 128, 0.6); }
-.p { border-color: rgba(128, 128, 128, 0.36); }
-.c { background: rgba(128, 128, 128, 0.14); }
+.box { position: fixed; pointer-events: none; box-sizing: border-box; }
 .sel-outline { outline: 1.5px solid #fff; box-shadow: 0 0 0 2.5px #111; }
 .hov-outline { outline: 1px dashed #fff; box-shadow: 0 0 0 1px #111; }
 .peer { outline: 1px dotted #fff; box-shadow: 0 0 0 1px rgba(17, 17, 17, 0.55); }
@@ -50,18 +44,12 @@ export interface DragModel {
   drop: (to: number) => void;
 }
 
-interface Layer {
-  m: HTMLDivElement;
-  bd: HTMLDivElement;
-  p: HTMLDivElement;
-  c: HTMLDivElement;
-  outline: HTMLDivElement;
-}
+type Rect = Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>;
 
 let host: HTMLElement | null = null;
 let root: ShadowRoot | null = null;
-let hoverLayer: Layer | null = null;
-let selLayer: Layer | null = null;
+let hoverBox: HTMLDivElement | null = null;
+let selBox: HTMLDivElement | null = null;
 let tag: HTMLDivElement | null = null;
 let peerBox: HTMLDivElement | null = null;
 let grip: HTMLDivElement | null = null;
@@ -72,6 +60,10 @@ let parts: Record<MeasurePart, HTMLDivElement[]> = { mline: [], mcap: [], mlabel
 let measureFn: (() => MeasureDraw | null) | null = null;
 
 let hoverEl: Element | null = null;
+/** 悬停来自面板上的那一行，不是页面上的指针 */
+let hoverFromPanel = false;
+/** 刚在页面上点选的元素：指针移开之前不画它 */
+let muted: Element | null = null;
 let selEl: Element | null = null;
 let selNote = '';
 let peers: Element[] = [];
@@ -88,11 +80,6 @@ function div(cls: string, parent: Node): HTMLDivElement {
   return d;
 }
 
-function makeLayer(outlineCls: string): Layer {
-  const r = root!;
-  return { m: div('box m', r), bd: div('box bd', r), p: div('box p', r), c: div('box c', r), outline: div(`box ${outlineCls}`, r) };
-}
-
 function ensure() {
   if (host && host.isConnected) return;
   if (!document.documentElement) return;
@@ -104,8 +91,8 @@ function ensure() {
   style.textContent = STYLE;
   root.appendChild(style);
   peerBox = div('peers', root);
-  hoverLayer = makeLayer('hov-outline');
-  selLayer = makeLayer('sel-outline');
+  hoverBox = div('box hov-outline hidden', root);
+  selBox = div('box sel-outline hidden', root);
   measureBox = div('measure', root);
   parts = { mline: [], mcap: [], mlabel: [], mguide: [] };
   tag = div('tag hidden', root);
@@ -146,16 +133,6 @@ function wireGrip(g: HTMLDivElement) {
   g.addEventListener('pointercancel', () => endDrag(false));
   g.addEventListener('lostpointercapture', () => endDrag(false));
   for (const t of ['click', 'dblclick', 'mousedown', 'mouseup', 'contextmenu']) g.addEventListener(t, stop);
-  window.addEventListener(
-    'keydown',
-    (e) => {
-      if (!drag || e.key !== 'Escape') return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      endDrag(false);
-    },
-    true,
-  );
 }
 
 function moveDrag(e: PointerEvent) {
@@ -185,36 +162,22 @@ function endDrag(commit: boolean) {
   kick();
 }
 
-function place(d: HTMLElement, x: number, y: number, w: number, h: number, borders?: [number, number, number, number]) {
+function place(d: HTMLElement, x: number, y: number, w: number, h: number) {
   d.style.left = `${x}px`;
   d.style.top = `${y}px`;
   d.style.width = `${Math.max(0, w)}px`;
   d.style.height = `${Math.max(0, h)}px`;
-  if (borders) d.style.borderWidth = borders.map((b) => `${Math.max(0, b)}px`).join(' ');
   d.classList.remove('hidden');
 }
 
-function hideLayer(l: Layer | null) {
-  if (!l) return;
-  for (const d of Object.values(l)) d.classList.add('hidden');
-}
-
-function drawLayer(l: Layer, el: Element, tint: boolean) {
-  const r = el.getBoundingClientRect();
-  const cs = getComputedStyle(el);
-  const n = (v: string) => parseFloat(v) || 0;
-  const mt = n(cs.marginTop), mr = n(cs.marginRight), mb = n(cs.marginBottom), ml = n(cs.marginLeft);
-  const bt = n(cs.borderTopWidth), br = n(cs.borderRightWidth), bb = n(cs.borderBottomWidth), bl = n(cs.borderLeftWidth);
-  const pt = n(cs.paddingTop), pr = n(cs.paddingRight), pb = n(cs.paddingBottom), pl = n(cs.paddingLeft);
-  place(l.outline, r.left, r.top, r.width, r.height);
-  if (!tint) {
-    for (const d of [l.m, l.bd, l.p, l.c]) d.classList.add('hidden');
+function outline(d: HTMLElement | null, el: Element | null) {
+  if (!d) return;
+  if (!el) {
+    d.classList.add('hidden');
     return;
   }
-  place(l.m, r.left - Math.max(0, ml), r.top - Math.max(0, mt), r.width + Math.max(0, ml) + Math.max(0, mr), r.height + Math.max(0, mt) + Math.max(0, mb), [mt, mr, mb, ml]);
-  place(l.bd, r.left, r.top, r.width, r.height, [bt, br, bb, bl]);
-  place(l.p, r.left + bl, r.top + bt, r.width - bl - br, r.height - bt - bb, [pt, pr, pb, pl]);
-  place(l.c, r.left + bl + pl, r.top + bt + pt, r.width - bl - br - pl - pr, r.height - bt - bb - pt - pb);
+  const r = el.getBoundingClientRect();
+  place(d, r.left, r.top, r.width, r.height);
 }
 
 /** 元素的标签；withGrip 时左边带着拖动换序的把手 */
@@ -238,9 +201,9 @@ function drawTag(el: Element, note: string, withGrip: boolean) {
   tag.style.top = `${top}px`;
 }
 
-function drawPeers() {
+function drawPeers(on: boolean) {
   if (!peerBox) return;
-  const need = selEl ? peers.filter((p) => p !== selEl && p.isConnected).slice(0, 80) : [];
+  const need = on && selEl ? peers.filter((p) => p !== selEl && p.isConnected).slice(0, 80) : [];
   while (peerBox.childElementCount < need.length) div('box peer', peerBox);
   const kids = Array.from(peerBox.children) as HTMLElement[];
   kids.forEach((k, i) => {
@@ -304,29 +267,50 @@ function drawMeasure(m: MeasureDraw | null) {
   hideParts('mguide', guides.length);
 }
 
+/**
+ * 这一帧画什么。悬停的别的元素：虚线框加标签。选中元素平时不画，悬停到它身上时画整套
+ * （实线框、带代码位置的标签、把手、同源元素）；刚在页面上点选它、指针还没移开过的不算，面板上悬停它那一行算。
+ * 量距离时选中元素只描边，收起标签，免得和量线、数字叠在一起
+ */
+export function shown<E>(s: { sel: E | null; hover: E | null; muted: E | null; fromPanel: boolean; measuring: boolean }): {
+  hover: E | null;
+  sel: 'full' | 'outline' | null;
+} {
+  const fresh = (el: E) => s.fromPanel || el !== s.muted;
+  const hover = s.hover && s.hover !== s.sel && fresh(s.hover) ? s.hover : null;
+  if (!s.sel) return { hover, sel: null };
+  if (s.measuring) return { hover, sel: 'outline' };
+  return { hover, sel: s.hover === s.sel && fresh(s.sel) ? 'full' : null };
+}
+
+/** 标签、把手连到选中元素边上的一块，四周放宽 pad：从元素移去拖把手的路上都在里面 */
+export function holdZone(tag: Rect, grip: Rect, el: Rect, pad = 4): Rect {
+  return {
+    left: Math.min(tag.left, grip.left, el.right) - pad,
+    right: Math.max(tag.right, grip.right, el.left) + pad,
+    top: Math.min(tag.top, grip.top, el.bottom) - pad,
+    bottom: Math.max(tag.bottom, grip.bottom, el.top) + pad,
+  };
+}
+
 function frame() {
   raf = 0;
   ensure();
   if (!root) return;
-  // 量距离时两个元素都只描边，不画外边距、内边距的色块，也收起元素标签，免得和量线、数字叠在一起
   const m = measureFn?.() ?? null;
-  if (hoverEl && hoverEl.isConnected && hoverEl !== selEl) drawLayer(hoverLayer!, hoverEl, !m);
-  else hideLayer(hoverLayer);
+  const sel = selEl && selEl.isConnected ? selEl : null;
+  const show = shown({ sel, hover: hoverEl && hoverEl.isConnected ? hoverEl : null, muted, fromPanel: hoverFromPanel, measuring: !!m });
+  outline(hoverBox, show.hover);
+  outline(selBox, show.sel ? sel : null);
   drawMeasure(m);
-  if (selEl && selEl.isConnected) {
-    drawLayer(selLayer!, selEl, !m && (!hoverEl || hoverEl === selEl));
-    if (m) {
-      tag?.classList.add('hidden');
-      grip?.classList.add('hidden');
-    } else drawTag(selEl, selNote, !!model && !gripOff);
-  } else {
-    hideLayer(selLayer);
+  if (sel && show.sel === 'full') drawTag(sel, selNote, !!model && !gripOff);
+  else if (show.hover && !m) drawTag(show.hover, '', false);
+  else {
+    tag?.classList.add('hidden');
     grip?.classList.add('hidden');
-    if (hoverEl && hoverEl.isConnected) drawTag(hoverEl, '', false);
-    else tag?.classList.add('hidden');
   }
-  drawPeers();
-  if ((hoverEl && hoverEl.isConnected) || (selEl && selEl.isConnected) || m) raf = requestAnimationFrame(frame);
+  drawPeers(show.sel === 'full');
+  if (show.hover || show.sel || m) raf = requestAnimationFrame(frame);
 }
 
 // 页面不出帧（窗口被遮住、后台截图）时 rAF 不触发，用定时器补画一帧
@@ -342,9 +326,36 @@ function kick() {
   }
 }
 
-export function setHover(el: Element | null) {
+/** 悬停的元素：页面上指针下的，fromPanel 时是面板上悬停的那一行 */
+export function setHover(el: Element | null, fromPanel = false) {
+  if (el !== muted) muted = null;
   hoverEl = el;
+  hoverFromPanel = fromPanel;
   kick();
+}
+
+/** 刚在页面上点选了 el：指针移开之前不画它 */
+export function mute(el: Element) {
+  muted = el;
+  kick();
+}
+
+/** 指针在把手、标签上，或者在它们和选中元素之间（把手露着时） */
+export function holds(x: number, y: number): boolean {
+  if (!selEl || !tag || !grip || grip.classList.contains('hidden')) return false;
+  const z = holdZone(tag.getBoundingClientRect(), grip.getBoundingClientRect(), selEl.getBoundingClientRect());
+  return x >= z.left && x <= z.right && y >= z.top && y <= z.bottom;
+}
+
+export function dragging(): boolean {
+  return !!drag;
+}
+
+/** 正在拖把手时取消拖动，返回有没有在拖 */
+export function cancelDrag(): boolean {
+  if (!drag) return false;
+  endDrag(false);
+  return true;
 }
 
 export function setSelected(el: Element | null, note = '', same: Element[] = []) {
@@ -362,7 +373,6 @@ export function setDragModel(m: DragModel | null) {
   kick();
 }
 
-/** 选元素模式下收起把手：点击要留给选元素 */
 export function setGripHidden(off: boolean) {
   gripOff = off;
   if (off) endDrag(false);

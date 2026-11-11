@@ -278,9 +278,9 @@ export type BridgeEvent =
   | { t: 'page'; page: PageInfo }
   | { t: 'select'; el: ElementSnapshot | null }
   | { t: 'pick'; on: boolean }
-  /** 标尺开关变了（页面上按 Esc 退出、选取元素把它顶掉） */
+  /** 标尺开关变了（页面上按 Esc 关掉） */
   | { t: 'measure'; on: boolean }
-  /** 在页面上双击改文字：live 是输入过程中，commit 是回车或失焦；按 Esc 时把开始编辑时的文字作为 commit 发回来 */
+  /** 在页面上双击改文字：live 是输入过程中，commit 是回车、失焦或自由选择里点了别处；按 Esc 时把开始编辑时的文字作为 commit 发回来 */
   | { t: 'editText'; uid: string; segment: number; value: string; phase: 'live' | 'commit' }
   /** 在页面上拖动选中元素的把手换位置：to 是放下处在兄弟组里的位置（按页面上现在看到的顺序，0 起） */
   | { t: 'reorder'; uid: string; to: number }
@@ -326,7 +326,7 @@ export interface BridgeMethods {
   ping: { p: Record<string, never>; r: 'pong' };
   pageInfo: { p: Record<string, never>; r: PageInfo };
   setPick: { p: { on: boolean }; r: boolean };
-  /** 标尺：开着时量悬停元素和选中元素之间的距离，点击改选中、Esc 退出；和选取元素互斥 */
+  /** 标尺：开着时量悬停元素和选中元素之间的距离，点击改选中、Esc 关掉；和自由选择可以同时开 */
   setMeasure: { p: { on: boolean }; r: boolean };
   /** 标尺和 Alt 临时测量用的间距刻度 */
   measureSteps: { p: { steps: MeasureStep[] }; r: boolean };

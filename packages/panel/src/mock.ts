@@ -570,14 +570,11 @@ export function createMockHost(): Host {
         return;
       case 'measure':
         state.measureOn = m.on;
-        if (m.on) state.pickOn = false;
         break;
       case 'pick':
         state.pickOn = m.on;
-        if (m.on) state.measureOn = false;
         if (m.on)
           setTimeout(() => {
-            state.pickOn = false;
             select('e2');
             emit();
           }, 900);

@@ -78,7 +78,7 @@ export function App({ host }: { host: Host }) {
         {connected && !sel && (
           <div className="empty">
             <p>{t('panel.empty.pick')}</p>
-            <p className="muted">{t('panel.empty.esc')}</p>
+            <p className="muted">{t('panel.empty.stop')}</p>
           </div>
         )}
         {connected && sel && (
