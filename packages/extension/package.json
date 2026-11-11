@@ -2,7 +2,7 @@
   "name": "cursor-css-tuner",
   "displayName": "Cursor CSS Tuner",
   "description": "Pick elements in Cursor's built-in browser, tune their CSS, edit their text and component props, and reorder them with live preview, then write the changes back to your source code, with one-click revert for each change.",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "publisher": "WYCM9527",
   "license": "MIT",
   "repository": {

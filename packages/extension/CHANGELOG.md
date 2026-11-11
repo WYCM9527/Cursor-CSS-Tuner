@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.13.0
+
+- Pick Element stays on. Click it once and keep picking: the element under the pointer gets a dashed outline, a click selects it, and clicking another element switches to it. Click the button again to stop; Esc no longer stops picking. While you pick, clicks don't reach the page, and picking is still on after the tab reloads.
+- The selected element is no longer outlined all the time. Move the pointer off it and back to see its outline, source location and reorder handle, with the other elements rendered by the same code marked on the page. The colored margin and padding areas are gone.
+- While picking, double-clicking any text on the page edits it in place. With picking off, this works on text inside the selected element, as before.
+- The ruler and picking can be on at the same time. Esc turns the ruler off and leaves picking on.
+- Linked edits: when one line of JSX or one template renders several elements (three pricing cards, the rows of a list), a change now shows up only on the ones that get that property from the same place in your code. Before, it showed up on all of them.
+  - Elements count as alike when the property comes from the same rule or class, the same `style` value, or is inherited from the same declaration. Padding that all three cards get from `p-6` changes on all three. If the highlighted card takes its background from another branch of a condition, changing the background of one of the other two changes both and leaves the highlighted card alone.
+  - A class written in both branches of a condition, or in several variants, changes only where the selected element uses it.
+  - In plain CSS, a property added to a rule that matches several elements previews only on the ones that got it from the same place.
+  - Each field's tooltip and the change list say how many elements a change affects. The prompt tells the Agent which ones to change and to leave the rest as they are.
+  - After the hand-off, the check looks at all of them: the ones that should change did, and the rest stayed as they were. If not, the change says how many changed and keeps waiting.
+- Fixed: an element could be left with an empty `style` attribute after its preview was removed.
+- Fixed: removing a stroke color written as a `border-color` shorthand with `var()` only changed the top side in the preview.
+- Fixed: dragging a value was slow when the same code rendered thousands of elements.
+
 ## 0.12.0
 
 - The panel's toolbar is down to Pick Element and the ruler:
